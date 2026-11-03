@@ -1,7 +1,8 @@
-import db
 import sys
 from pathlib import Path
-from flask import Flask, render_template
+from flask import Flask, render_template, request
+from flask_sqlalchemy import SQLAlchemy
+from db import RaceDB
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -10,6 +11,8 @@ app = Flask(
     template_folder=str(ROOT / "templates"),
     static_folder=str(ROOT / "static"),
 )
+
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///race_data.db"
 
 
 @app.route("/")
@@ -20,4 +23,6 @@ def index():
 # Main Application
 if __name__ == "__main__":
     # TODO: CLI Arguments for DB input
-    app.run(host="0.0.0.0")  # Don't use like this in prod
+    RaceDB(SQLAlchemy(app))  # Connect SQLAlchemy to our DB Management class
+
+    app.run(host="0.0.0.0")

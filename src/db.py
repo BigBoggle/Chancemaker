@@ -1,22 +1,22 @@
 import sqlite3
 import json
+from flask_sqlalchemy import SQLAlchemy
+
+# DB Model
 
 
-# TODO: create functions to create database from json input.
-class RacerDB:
-    con = None  # Database Connection
+# Database Class for Races, which takes valid JSON inputs and imports them into the SQL DB.
+class RaceDB:
+    def __init__(self, db):
+        # Maybe wrap this in a try block
+        self.db = db  # Pass SQLALCHEMY instance to the class in app.
 
-    def __init__(self, db_name: str):
-        try:
-            self.con = sqlite3.connect(db_name)
-        except:
-            print(f"Failed to connect to {db_name}")
+    # TODO: create functions to create database from json input.
 
     # Get access to database connection
     def get_db(self):
-        return con
+        return self.db
 
-    # Print Database contents in a formatted report to stdout
-    def print_db(self):
-        if self.con is not None:
-            print("DATABASE:")
+    def import_json(self, raw):
+        data = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
+        return
