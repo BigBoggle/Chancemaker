@@ -8,3 +8,17 @@ dependencies = [
     "flask>=3.1,<4",
     "flask-sqlalchemy>=3.1,<4",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pyright]
+venv = "python-3.14"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
