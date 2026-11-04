@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from flask import Flask, render_template, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
-from db import db, RaceDB, RaceModel
+from models import models, RaceDB, RaceModel
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -16,13 +16,13 @@ app = Flask(
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///race_data.db"
 
 # Make the SQLAlchemy and RaceDB classes global for all request handling
-db = SQLAlchemy(app)
+models = SQLAlchemy(app)
 raceManager = RaceDB(app)
 
 # The Main webpage displayed
 @app.route("/")
 def index():
-    return render_template("index.html")#, races = raceData) # Helps pass all the data to index.html to be used
+    return render_template("index.html") # Helps pass all the data to index.html to be used
 
 # JSON endpoint requested by the site
 @app.route("/races", methods=["GET"]) #Note: Methods is not defined for some reason
@@ -73,5 +73,5 @@ if __name__ == "__main__":
     # TODO: CLI Arguments for DB input
     #RaceDB(SQLAlchemy(app))  # Connect SQLAlchemy to our DB Management class # Should initialize the # I already made these into globabl variables to handle requests better
     with app.app_context(): # This helps tell SQLAlchemy which tables we need to build from the db after waiting for Flask to load
-        db.create_all()
+        models.create_all()
     app.run(host="0.0.0.0")
