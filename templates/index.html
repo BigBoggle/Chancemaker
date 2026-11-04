@@ -1,8 +1,43 @@
 {% extends "base.html" %}
 
-{% block title %}Home Page{% endblock %}
+{% block title %}Chancemaker Home Page{% endblock %}
 
 {% block content %}
-  <h1>Header 1</h1>
-  <p>Summary paragraph</p>
+  <h1>Chancemaker Home Page</h1>
+  <p>
+    Hello welcome to Chancemaker, the best place to make all of your horse racing prediction algorithms!
+  </p>
+  <aside>
+    <p>
+      Such as with Keenland and other derbies.
+    </p>
+  </aside>
+  <p>
+    Below are options available for looking into to that we have calculated with our predictions.
+  </p>
+  <br>
+  
+  <div>
+    <label for="name">Enter your first then last name:</label>
+    <input type="text" id="name" name="name">
+    <input type="text" id="name" name="name">
+  </div>
+  <div>
+    <label for="preference">Preferences:</label>
+    <select id="preference" name="preference">
+    <option>Races</option>
+    <option>Tracks</option>
+    <option>Horses</option>
+    </select>
+  </div>
+  <img src="https://engr.uky.edu/sites/default/files/styles/webp/public/2024-10/ashley-jeff-1a.jpg.webp?itok=v4gbg0Zv" alt="This is the great Dr. Jeffrey Ashley who has saved countless lives over the course of his career and is renowned around UK as a selfless hero" title="Dr. Jeffrey Ashley">
+  <p>And here is the obligatory link to <a href="https://engr.uky.edu/people/jeff-ashley">Dr. Jeffrey Ashley's</a> work!</p>
+  <br>
+
+  <h1>Page selection</h1>
+  <button class="testbutton">Test Button that does nothing</button>
+  <section>
+    <a href="#">Previous Page</a>
+    <a href="#">Next Page</a>
+  </section>
 {% endblock %}
