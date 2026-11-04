@@ -1,0 +1,36 @@
+[
+  {
+    "race_name": "Belmont Race 1",
+    "race_season": "Spring",
+    "race_date": "1987-11-15",
+    "track_location": "Belmont NY",
+    "track_name": "Belmont",
+    "race_distance_furlongs": 10,
+    "race_track_surface": "dirt",
+    "race_participants": [
+      {
+        "horse_name": "Seabiscuit",
+        "horse_trainer": "Ghost Johnson",
+        "race_jockey": "Jeff Ashley",
+        "horse_description": "Might be a horse...",
+        "race_horse_running_style": "Stalker",
+        "race_horse_program_number": "1",
+        "race_horse_morning_line_number": 10.0,
+        "race_horse_speed_figures": 54.0,
+        "race_horse_distance_figures": [98.0, 10.0, 20.0, 20.0, 16.0, 10.0],
+        "race_horse_class": 20.0,
+        "race_horse_pace": {
+          "early_pace": 40.0,
+          "late_pace": 30.0
+        },
+        "race_scratched": false,
+        "model_predicted_rank": 1,
+        "model_is_predicted_winner": true,
+        "model_score": 97,
+        "model_win_probability": 0.525,
+        "model_confidence_score": 83,
+        "model_confidence_label": "HIGH"
+      }
+    ]
+  }
+]
