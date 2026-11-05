@@ -23,6 +23,8 @@ target-version = ["py314"]
 
 [tool.pyright]
 pythonVersion = "3.14"
+include = ["src", "tests"]
+exclude = ["build", "**/__pycache__", ".direnv", ".venv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -43,6 +45,10 @@ exclude = [
     ".pytest_cache",
 ]
 extend-ignore = ["E203", "W503", "E701", "E704"]
+per-file-ignores = [
+    "src/model/pp_json_to_handicap.py:C901,E501",
+    "src/model/handicap.py:E501",
+]
 count = true
 show-source = true
 statistics = true
