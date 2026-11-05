@@ -1,8 +1,77 @@
 {% extends "base.html" %}
 
-{% block title %}Home{% endblock %}
+{% block title %}Chancemaker Home Page{% endblock %}
 
 {% block content %}
-  <h1>HEADING</h1>
-  <p>Stuff</p>
+<h1>Chancemaker predictions</h1>
+    <div id="raceContainer" class="loading">Loading...</div>
+    <script> // Allows the inside here to be executable javaScript
+        async function loadRaces() {
+            try { //Try so in case it fails it automatically umps to catch\
+              const response = await fetch('/races'); // Fetches our JSON from localhost:5000/races
+              const races = await response.json(); //Wait for the response JSON fethed from /races
+              const container = document.getElementById('raceContainer');
+              container.innerHTML = ''; // Initialized initially blank contents of container
+              
+              races.forEach(race => {
+                  // Create card container
+                  const card = document.createElement('div');
+                  card.className = 'race-card';
+                  
+                  // Format winning prediction safely
+                  let rowsHtml = '';
+                  race.entries.forEach(entry => {
+                      const pred = entry.predictions[0] || {};
+                      const isWinner = pred.is_winner ? 'winner' : '';
+                      const winProb = pred.win_probability ? (pred.win_probability * 100).toFixed(1) + '%' : 'N/A';
+                        
+                      rowsHtml += `
+                          <tr class="${isWinner}">
+                              <td>${entry.program_number}</td>
+                              <td>${entry.horse_name}</td>
+                              <td>${entry.horse_trainer}</td>
+                              <td>${entry.jockey_name}</td>
+                              <td>${entry.running_style}</td>
+                              <td>${entry.morning_line_odds}</td>
+                              <td>${entry.speed_figures}</td>
+                              <td>#${pred.rank || 'N/A'}</td>
+                              <td>${winProb}</td>
+                          </tr>                        `;
+                  });
+
+                  // Set the inner structure of the race card
+                  card.innerHTML = `
+                      <h2>${race.race_name}</h2>
+                      <p><strong>Track:</strong> ${race.track_name} (${race.track_location}) | <strong>Date:</strong> ${race.race_date} | <strong>Distance:</strong> ${race.race_distance_f}f</p>
+                      <table>
+                          <thead>
+                              <tr>
+                                  <th>Prog #</th>
+                                  <th>Horse</th>
+                                  <th>Trainer</th>
+                                  <th>Jockey</th>
+                                  <th>Style</th>
+                                  <th>Odds</th>
+                                  <th>Speed</th>
+                                  <th>Rank</th>
+                                  <th>Win Prob</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              ${rowsHtml}
+                          </tbody>
+                      </table>
+                  `;
+                  
+                  container.appendChild(card);
+              });
+          } catch (error) {
+              console.error('Error:', error);
+              document.getElementById('raceContainer').innerHTML = '<p style="color: red;">Failed to load race data.</p>';
+          }
+      }
+
+      // Run when page opens
+      loadRaces();
+    </script>
 {% endblock %}
