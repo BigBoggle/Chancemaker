@@ -340,9 +340,11 @@ def derive_raw_pp_proxies(out, horse, current_distance=None, current_surface=Non
         if class_scores:
             # Normalize class strength to the same 0-100 scale for the blend.
             c = average(class_scores)
-            if c > 100:
-                c = min(100.0, 50.0 + (c - 20.0) * 2.0)
-            parts.append((c, 0.35))
+            if c is not None:
+                if c > 100:
+                    c = min(100.0, 50.0 + (c - 20.0) * 2.0)
+                    parts.append((c, 0.35))
+
         if parts:
             total_weight = sum(w for _, w in parts)
             out["primepower"] = round(sum(v * w for v, w in parts) / total_weight, 2)
