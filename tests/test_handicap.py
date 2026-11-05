@@ -1,6 +1,6 @@
-"""Tests for handicap.py: tables, scorers, confidence, JSONC reading/writing, CLI."""
+"""Tests for handicap.py: scoring, confidence, JSONC reading/writing, CLI."""
 
-# One test per function makes this long; the module-size limit is not useful here.
+# One test per function makes this long; the size limit is not useful here.
 # pylint: disable=too-many-lines
 
 from __future__ import annotations
@@ -43,23 +43,72 @@ def ranked(*names: str) -> list[tuple[str, float, dict[str, int], list[str]]]:
 def route_field() -> list[dict[str, Any]]:
     """Three engine horses with a clear order and a lone speed horse (A)."""
     return [
-        {"name": "A", "lp": 90, "avgspd": 100, "primepower": 95, "avgdist": 90,
-         "lastclass": 95, "pl": 2, "trainer": "baffert", "style": "P", "ep1": 50},
-        {"name": "B", "lp": 80, "avgspd": 90, "primepower": 85, "avgdist": 80,
-         "lastclass": 85, "pl": 6, "trainer": "nobody", "style": "S", "ep1": 40},
-        {"name": "C", "lp": 70, "avgspd": 80, "primepower": 75, "avgdist": 70,
-         "lastclass": 75, "pl": 15, "ep1": 30},
-    ]  # fmt: skip
+        {
+            "name": "A",
+            "lp": 90,
+            "avgspd": 100,
+            "primepower": 95,
+            "avgdist": 90,
+            "lastclass": 95,
+            "pl": 2,
+            "trainer": "baffert",
+            "style": "P",
+            "ep1": 50,
+        },
+        {
+            "name": "B",
+            "lp": 80,
+            "avgspd": 90,
+            "primepower": 85,
+            "avgdist": 80,
+            "lastclass": 85,
+            "pl": 6,
+            "trainer": "nobody",
+            "style": "S",
+            "ep1": 40,
+        },
+        {
+            "name": "C",
+            "lp": 70,
+            "avgspd": 80,
+            "primepower": 75,
+            "avgdist": 70,
+            "lastclass": 75,
+            "pl": 15,
+            "ep1": 30,
+        },
+    ]
 
 
 def sprint_field() -> list[dict[str, Any]]:
     """Two engine horses for the sprint scorer; A has a best-speed figure."""
     return [
-        {"name": "A", "avgspd": 100, "primepower": 90, "lp": 80, "lastclass": 90,
-         "bestspd": 105, "pp": 1, "pl": 2, "style": "P", "trainer": "baffert", "ep1": 40},
-        {"name": "B", "avgspd": 90, "primepower": 80, "lp": 70, "lastclass": 80,
-         "pp": 5, "pl": 10, "style": "S", "trainer": "nobody", "ep1": 30},
-    ]  # fmt: skip
+        {
+            "name": "A",
+            "avgspd": 100,
+            "primepower": 90,
+            "lp": 80,
+            "lastclass": 90,
+            "bestspd": 105,
+            "pp": 1,
+            "pl": 2,
+            "style": "P",
+            "trainer": "baffert",
+            "ep1": 40,
+        },
+        {
+            "name": "B",
+            "avgspd": 90,
+            "primepower": 80,
+            "lp": 70,
+            "lastclass": 80,
+            "pp": 5,
+            "pl": 10,
+            "style": "S",
+            "trainer": "nobody",
+            "ep1": 30,
+        },
+    ]
 
 
 def pace_only(*ep_values: int) -> list[dict[str, Any]]:
@@ -106,25 +155,34 @@ def race_fixture() -> dict[str, Any]:
     """Alpha > Bravo > Charlie on every figure, plus a scratched Delta."""
     return make_race(
         make_participant(
-            "Alpha", race_horse_speed_figures=100, race_horse_class=95,
-            race_horse_program_number="1", race_horse_morning_line_number=2.0,
+            "Alpha",
+            race_horse_speed_figures=100,
+            race_horse_class=95,
+            race_horse_program_number="1",
+            race_horse_morning_line_number=2.0,
             race_horse_distance_figures=[95, 97],
             race_horse_pace={"early_pace": 90, "late_pace": 85},
         ),
         make_participant(
-            "Bravo", race_horse_speed_figures=90, race_horse_class=85,
-            race_horse_program_number="2", race_horse_morning_line_number=4.0,
+            "Bravo",
+            race_horse_speed_figures=90,
+            race_horse_class=85,
+            race_horse_program_number="2",
+            race_horse_morning_line_number=4.0,
             race_horse_distance_figures=[85, 87],
             race_horse_pace={"early_pace": 70, "late_pace": 75},
         ),
         make_participant(
-            "Charlie", race_horse_speed_figures=80, race_horse_class=75,
-            race_horse_program_number="3", race_horse_morning_line_number=12.0,
+            "Charlie",
+            race_horse_speed_figures=80,
+            race_horse_class=75,
+            race_horse_program_number="3",
+            race_horse_morning_line_number=12.0,
             race_horse_distance_figures=[75, 77],
             race_horse_pace={"early_pace": 60, "late_pace": 65},
         ),
         make_participant("Delta", race_scratched=True),
-    )  # fmt: skip
+    )
 
 
 @pytest.fixture(name="races_file")
@@ -192,7 +250,7 @@ def test_sprint_v9_caps_are_tighter() -> None:
 
 
 def test_ranks_handles_ties_and_order() -> None:
-    """Higher is better; tied values share a rank and the next rank is skipped."""
+    """Higher is better; ties share a rank and the next rank is skipped."""
     horses = [{"x": 10}, {"x": 20}, {"x": 20}, {"x": 5}]
     assert handicap.ranks(horses, "x") == [3, 1, 1, 4]
 
@@ -248,7 +306,10 @@ def test_pace_scenario_lone_speed_at_threshold() -> None:
 
 def test_pace_scenario_duel_group() -> None:
     """Horses within 4 of the top EP1 form the duel group, best first."""
-    assert handicap.pace_scenario(pace_only(90, 88, 87, 70)) == (None, ["A", "B", "C"])
+    assert handicap.pace_scenario(pace_only(90, 88, 87, 70)) == (
+        None,
+        ["A", "B", "C"],
+    )
 
 
 def test_pace_scenario_no_duel_when_only_one_near_top() -> None:
@@ -268,22 +329,46 @@ def test_pace_scenario_missing_pace_counts_as_zero() -> None:
 
 
 def test_route_like_scores_each_horse() -> None:
-    """Every component for a three-horse route field, with A as lone presser."""
+    """Every component for a three-horse route field (A is lone presser)."""
     results = {
         row[0]: row for row in handicap.score_route_like(route_field(), handicap.ROUTE)
     }
     _, total, parts, tags = results["A"]
-    assert parts == {"lp": 22, "class": 17, "speed": 17, "dist": 13, "form": 13,
-                     "trainer": 9, "workout": 9, "adj": 8}  # fmt: skip
+    assert parts == {
+        "lp": 22,
+        "class": 17,
+        "speed": 17,
+        "dist": 13,
+        "form": 13,
+        "trainer": 9,
+        "workout": 9,
+        "adj": 8,
+    }
     assert total == sum(parts.values())
     assert tags == ["PRESSER", "LONE_SPEED"]
     _, _, parts, tags = results["B"]
-    assert parts == {"lp": 19, "class": 16, "speed": 15, "dist": 11, "form": 12,
-                     "trainer": 6, "workout": 5, "adj": 3}  # fmt: skip
+    assert parts == {
+        "lp": 19,
+        "class": 16,
+        "speed": 15,
+        "dist": 11,
+        "form": 12,
+        "trainer": 6,
+        "workout": 5,
+        "adj": 3,
+    }
     assert tags == ["CLOSER"]
     _, _, parts, tags = results["C"]
-    assert parts == {"lp": 17, "class": 15, "speed": 14, "dist": 10, "form": 11,
-                     "trainer": 6, "workout": 3, "adj": 0}  # fmt: skip
+    assert parts == {
+        "lp": 17,
+        "class": 15,
+        "speed": 14,
+        "dist": 10,
+        "form": 11,
+        "trainer": 6,
+        "workout": 3,
+        "adj": 0,
+    }
     assert not tags
 
 
@@ -332,13 +417,30 @@ def test_sprint_scores_each_horse() -> None:
         row[0]: row for row in handicap.score_sprint(sprint_field(), handicap.SPRINT)
     }
     _, total, parts, tags = results["A"]
-    assert parts == {"speed": 19, "class": 19, "pace": 15, "post": 8, "market": 12,
-                     "style": 12, "drop": 8, "trainer": 8, "lone": 4}  # fmt: skip
+    assert parts == {
+        "speed": 19,
+        "class": 19,
+        "pace": 15,
+        "post": 8,
+        "market": 12,
+        "style": 12,
+        "drop": 8,
+        "trainer": 8,
+        "lone": 4,
+    }
     assert total == sum(parts.values())
     assert tags == ["PRESSER", "BESTSPD1", "LONE_SPEED"]
     _, _, parts, tags = results["B"]
-    assert parts == {"speed": 17, "class": 17, "pace": 13, "post": 5, "market": 5,
-                     "style": 8, "drop": 7, "trainer": 6}  # fmt: skip
+    assert parts == {
+        "speed": 17,
+        "class": 17,
+        "pace": 13,
+        "post": 5,
+        "market": 5,
+        "style": 8,
+        "drop": 7,
+        "trainer": 6,
+    }
     assert not tags
 
 
@@ -366,7 +468,7 @@ def test_sprint_best_speed_bonus_stops_after_rank_three() -> None:
 
 
 def test_sprint_style_points_default_and_cap() -> None:
-    """Missing style counts as E/P (12), unknown as 8, and a presser is capped."""
+    """Missing style counts as E/P (12), unknown as 8, a presser is capped."""
     horses: list[dict[str, Any]] = [
         {"name": "A"},
         {"name": "B", "style": "S"},
@@ -404,9 +506,15 @@ def test_sprint_manual_lone_override() -> None:
 
 @pytest.mark.parametrize(
     ("distance", "surface", "expected"),
-    [(6, "dirt", "sprint"), (7.5, "dirt", "sprint"), (8, "dirt", "route"),
-     (8.5, "synthetic", "route"), (6, "turf", "turf"), (10, "turf", "turf")],
-)  # fmt: skip
+    [
+        (6, "dirt", "sprint"),
+        (7.5, "dirt", "sprint"),
+        (8, "dirt", "route"),
+        (8.5, "synthetic", "route"),
+        (6, "turf", "turf"),
+        (10, "turf", "turf"),
+    ],
+)
 def test_pick_formula(distance: float, surface: str, expected: str) -> None:
     """Turf always wins; otherwise under 8f is a sprint."""
     assert handicap.pick_formula(distance, surface) == expected
@@ -430,9 +538,14 @@ def test_score_race_skips_scratched_horses() -> None:
 
 
 def test_score_race_route_and_turf_kinds() -> None:
-    """Distance and surface choose the route or turf formula; surface defaults to dirt."""
+    """Distance and surface pick route or turf; surface defaults to dirt."""
     route = {"name": "R", "distance_f": 8.5, "horses": route_field()}
-    turf = {"name": "R", "distance_f": 8.5, "surface": "turf", "horses": route_field()}
+    turf = {
+        "name": "R",
+        "distance_f": 8.5,
+        "surface": "turf",
+        "horses": route_field(),
+    }
     assert handicap.score_race(route)[0] == "route"
     assert handicap.score_race(turf)[0] == "turf"
 
@@ -464,18 +577,25 @@ PP_BASE: dict[str, Any] = {
 
 def test_pp_sheet_full_example() -> None:
     """Every term of the PP-sheet score adds up."""
-    horse = {"spd": 100, "class": "stk300", "style": "E/P", "trainer_pts": 8,
-             "jockey_pts": 7, "odds": 3, "life": "5-3-2-0"}  # fmt: skip
+    horse = {
+        "spd": 100,
+        "class": "stk300",
+        "style": "E/P",
+        "trainer_pts": 8,
+        "jockey_pts": 7,
+        "odds": 3,
+        "life": "5-3-2-0",
+    }
     assert handicap.score_pp_sheet(horse) == pytest.approx(81.8)
 
 
 def test_pp_sheet_defaults() -> None:
-    """With only a foreign grade, defaults fill class, trainer, jockey, odds and life."""
+    """With only a foreign grade, defaults fill every other term."""
     assert handicap.score_pp_sheet(PP_BASE) == pytest.approx(45.0)
 
 
 def test_pp_sheet_foreign_floor_grades() -> None:
-    """Foreign grades stand in for a missing speed figure; zero counts as missing."""
+    """Foreign grades replace a missing speed figure; zero is missing."""
     assert handicap.score_pp_sheet({"foreign_grade": "G2"}) == pytest.approx(44.0)
     assert handicap.score_pp_sheet({"foreign_grade": "G3"}) == pytest.approx(43.0)
     assert handicap.score_pp_sheet({"foreign_grade": "LISTED"}) == pytest.approx(42.0)
@@ -571,7 +691,7 @@ def test_conf_data_counts_present_fields() -> None:
 
 
 def test_conf_field_slides_with_field_size() -> None:
-    """Small fields get 1.0, big fields the floor, and a linear slide between."""
+    """Small fields get 1.0, big fields the floor, linear slide between."""
     assert handicap.conf_field(6) == 1.0
     assert handicap.conf_field(14) == handicap.FIELD_FLOOR
     assert handicap.conf_field(20) == handicap.FIELD_FLOOR
@@ -614,11 +734,17 @@ def test_race_confidence_maxes_out() -> None:
     conf = handicap.race_confidence(race, res, res)
     assert conf["score"] == 100
     assert conf["label"] == "HIGH"
-    assert set(conf["components"]) == {"margin", "agreement", "data", "field", "pace"}
+    assert set(conf["components"]) == {
+        "margin",
+        "agreement",
+        "data",
+        "field",
+        "pace",
+    }
 
 
 def test_race_confidence_low_case_ignores_scratched() -> None:
-    """Tied totals, swapped picks, no data and a duel make a LOW score of 27."""
+    """Tied totals, swapped picks, no data and a duel give a LOW 27."""
     horses = [{"name": "A"}, {"name": "B"}, {"name": "C", "scratched": True}]
     race = {"horses": horses}
     res = [result_entry("A", 50), result_entry("B", 50)]
@@ -686,7 +812,7 @@ def test_load_jsonc_wraps_a_single_object(tmp_path: Path) -> None:
 
 
 def test_load_jsonc_numbers_and_literals(tmp_path: Path) -> None:
-    """Ints stay ints, decimals and exponents become floats, literals map to Python."""
+    """Ints stay ints, decimals/exponents become floats, literals map over."""
     values = parse(tmp_path, "[1, -2, 3.5, 1e3, 2E-1, true, false, null]")
     assert values == [1, -2, 3.5, 1000.0, 0.2, True, False, None]
     assert isinstance(values[0], int)
@@ -772,10 +898,21 @@ def test_in_horse_trainer() -> None:
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
-    [("Early", "E"), ("Speed", "E"), ("Front Runner", "E"), ("E/P", "E/P"),
-     ("Presser", "P"), ("Stalker", "P"), ("Closer", "S"), ("Sustained", "S"),
-     ("  s  ", "S"), ("Sprinter", None), ("", None), (None, None)],
-)  # fmt: skip
+    [
+        ("Early", "E"),
+        ("Speed", "E"),
+        ("Front Runner", "E"),
+        ("E/P", "E/P"),
+        ("Presser", "P"),
+        ("Stalker", "P"),
+        ("Closer", "S"),
+        ("Sustained", "S"),
+        ("  s  ", "S"),
+        ("Sprinter", None),
+        ("", None),
+        (None, None),
+    ],
+)
 def test_in_horse_style(raw: str | None, expected: str | None) -> None:
     """Running styles map onto E, E/P, P and S; anything else is None."""
     assert handicap.in_horse_style({"race_horse_running_style": raw}) == expected
@@ -825,14 +962,14 @@ def test_in_horse_class() -> None:
 
 
 def test_in_horse_early_pace() -> None:
-    """Early pace comes from the pace block; list-shaped or missing blocks give None."""
+    """Early pace comes from the pace block; list or missing gives None."""
     assert handicap.in_horse_early_pace({"race_horse_pace": {"early_pace": 80}}) == 80
     assert handicap.in_horse_early_pace({"race_horse_pace": [80, 85]}) is None
     assert handicap.in_horse_early_pace({}) is None
 
 
 def test_in_horse_late_pace() -> None:
-    """Late pace comes from the pace block; list-shaped or missing blocks give None."""
+    """Late pace comes from the pace block; list or missing gives None."""
     assert handicap.in_horse_late_pace({"race_horse_pace": {"late_pace": 85}}) == 85
     assert handicap.in_horse_late_pace({"race_horse_pace": [80, 85]}) is None
     assert handicap.in_horse_late_pace({}) is None
@@ -914,7 +1051,12 @@ def test_lower_temperature_favours_the_favourite() -> None:
 def test_pick_is_a_named_tuple() -> None:
     """Pick exposes rank, name, score and prob."""
     pick = handicap.Pick(1, "Alpha", 85.26, 0.45678)
-    assert (pick.rank, pick.name, pick.score, pick.prob) == (1, "Alpha", 85.26, 0.45678)
+    assert (pick.rank, pick.name, pick.score, pick.prob) == (
+        1,
+        "Alpha",
+        85.26,
+        0.45678,
+    )
 
 
 def test_col_predicted_rank() -> None:
@@ -958,13 +1100,19 @@ def test_score_jsonc_race_picks(race: dict[str, Any]) -> None:
     assert picks is not None
     assert conf is not None
     assert set(picks) == {"Alpha", "Bravo", "Charlie"}
-    assert [picks[name].rank for name in ("Alpha", "Bravo", "Charlie")] == [1, 2, 3]
+    assert [picks[name].rank for name in ("Alpha", "Bravo", "Charlie")] == [
+        1,
+        2,
+        3,
+    ]
     assert picks["Alpha"].score > picks["Bravo"].score > picks["Charlie"].score
     assert sum(pick.prob for pick in picks.values()) == pytest.approx(1.0)
     assert conf["label"] in {"HIGH", "MEDIUM", "LOW"}
 
 
-def test_score_jsonc_race_v9_still_ranks_alpha_first(race: dict[str, Any]) -> None:
+def test_score_jsonc_race_v9_still_ranks_alpha_first(
+    race: dict[str, Any],
+) -> None:
     """The v9 shadow model also runs end to end."""
     picks, _ = handicap.score_jsonc_race(race, "v9")
     assert picks is not None
@@ -1135,7 +1283,7 @@ def test_out_race_horse_pace_block() -> None:
 
 
 def test_out_race_horse_pace_partial_and_empty() -> None:
-    """Missing halves are dropped; empty, list-shaped or absent blocks give None."""
+    """Missing halves are dropped; empty, list or absent blocks give None."""
     partial = handicap.out_race_horse_pace({"race_horse_pace": {"late_pace": 85}}, IND)
     assert partial == '  "race_horse_pace": [\n    "late_pace": 85,\n  ],'
     assert handicap.out_race_horse_pace({"race_horse_pace": {}}, IND) is None
@@ -1186,7 +1334,7 @@ def test_out_model_score() -> None:
 
 
 def test_out_model_win_probability() -> None:
-    """Writes the probability to four decimals, or null for a scratched horse."""
+    """Writes the probability to four decimals, or null if scratched."""
     assert (
         handicap.out_model_win_probability(IND, PICK)
         == '  "model_win_probability": 0.4568,'
@@ -1262,7 +1410,7 @@ def test_render_participant_skips_missing_input_fields() -> None:
 
 
 def test_render_race(race: dict[str, Any]) -> None:
-    """A race block lists metadata, then every participant with model fields."""
+    """A race block lists metadata, then each participant with model fields."""
     text = handicap.render_race(race, "v8")
     lines = text.splitlines()
     assert lines[0] == "  {"
@@ -1298,9 +1446,16 @@ def test_write_jsonc_round_trips(tmp_path: Path, race: dict[str, Any]) -> None:
     assert loaded[0]["race_name"] == "Test Stakes"
     participants = loaded[0]["race_participants"]
     running = [item for item in participants if not item["race_scratched"]]
-    assert sorted(item["model_predicted_rank"] for item in running) == [1, 2, 3]
+    assert sorted(item["model_predicted_rank"] for item in running) == [
+        1,
+        2,
+        3,
+    ]
     assert sum(item["model_is_predicted_winner"] for item in running) == 1
-    assert participants[0]["race_horse_pace"] == {"early_pace": 90, "late_pace": 85}
+    assert participants[0]["race_horse_pace"] == {
+        "early_pace": 90,
+        "late_pace": 85,
+    }
     assert participants[0]["race_horse_distance_figures"] == [95, 97]
     assert participants[3]["model_score"] is None
 
@@ -1333,7 +1488,9 @@ def sandbox_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str
     return folders
 
 
-def test_find_default_input_prefers_current_folder(sandbox: dict[str, Path]) -> None:
+def test_find_default_input_prefers_current_folder(
+    sandbox: dict[str, Path],
+) -> None:
     """A file in the current folder wins over the other locations."""
     for key in ("cwd", "script", "tests"):
         (sandbox[key] / handicap.DEFAULT_NAME).write_text("[]", encoding="utf-8")
@@ -1341,7 +1498,9 @@ def test_find_default_input_prefers_current_folder(sandbox: dict[str, Path]) -> 
     assert found.resolve() == (sandbox["cwd"] / handicap.DEFAULT_NAME).resolve()
 
 
-def test_find_default_input_then_script_folder(sandbox: dict[str, Path]) -> None:
+def test_find_default_input_then_script_folder(
+    sandbox: dict[str, Path],
+) -> None:
     """Next it looks beside the script."""
     for key in ("script", "tests"):
         (sandbox[key] / handicap.DEFAULT_NAME).write_text("[]", encoding="utf-8")
@@ -1349,7 +1508,9 @@ def test_find_default_input_then_script_folder(sandbox: dict[str, Path]) -> None
     assert found.resolve() == (sandbox["script"] / handicap.DEFAULT_NAME).resolve()
 
 
-def test_find_default_input_then_tests_folder(sandbox: dict[str, Path]) -> None:
+def test_find_default_input_then_tests_folder(
+    sandbox: dict[str, Path],
+) -> None:
     """Last it tries a tests/ folder beside the script's folder."""
     (sandbox["tests"] / handicap.DEFAULT_NAME).write_text("[]", encoding="utf-8")
     found = Path(handicap.find_default_input())
@@ -1368,7 +1529,12 @@ def test_find_default_input_falls_back_to_current_folder_path(
 def test_parse_args_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """With no path it uses find_default_input and writes in place with v8."""
     monkeypatch.setattr(handicap, "find_default_input", lambda: "default.jsonc")
-    assert handicap.parse_args([]) == ("default.jsonc", "default.jsonc", "v8", False)
+    assert handicap.parse_args([]) == (
+        "default.jsonc",
+        "default.jsonc",
+        "v8",
+        False,
+    )
 
 
 def test_parse_args_path_only() -> None:
@@ -1384,7 +1550,12 @@ def test_parse_args_path_only() -> None:
 def test_parse_args_flags() -> None:
     """--v9, --text and --out are all picked up, in any order."""
     argv = ["--out", "other.jsonc", "race.jsonc", "--v9", "--text"]
-    assert handicap.parse_args(argv) == ("race.jsonc", "other.jsonc", "v9", True)
+    assert handicap.parse_args(argv) == (
+        "race.jsonc",
+        "other.jsonc",
+        "v9",
+        True,
+    )
 
 
 def test_parse_args_ignores_unknown_flags() -> None:
@@ -1459,5 +1630,5 @@ def test_main_text_skips_fully_scratched_races(
 
 
 def test_script_dir_helper_uses_real_paths() -> None:
-    """DEFAULT_NAME is a bare file name, so it can be joined onto any folder."""
+    """DEFAULT_NAME is a bare file name, so it joins onto any folder."""
     assert os.path.basename(handicap.DEFAULT_NAME) == handicap.DEFAULT_NAME
