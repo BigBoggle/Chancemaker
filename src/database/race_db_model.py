@@ -166,7 +166,7 @@ class Entry(db.Model):
         entry_race: Race,
         entry_horse: Horse,
         entry_jockey: Jockey,
-        entry_predictions: list[Prediction] | None = None,
+        entry_predictions: list["Prediction"] | None = None,
         entry_program_number: int,
         entry_morning_line_odds: float,
         entry_running_style: RunningStyle,
