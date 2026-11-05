@@ -36,6 +36,7 @@ lengths beaten, distance/surface, and pace calls. These are relative estimates, 
 official Equibase Speed Figures, pace figures, or Prime Power ratings. The output's
 optional derived_fields list identifies values created by the proxy calculations.
 """
+
 import argparse
 import json
 import math
@@ -43,17 +44,29 @@ import re
 import sys
 from pathlib import Path
 
-
 ALIASES = {
     "name": ("name", "horse_name", "horse"),
     "pp": ("pp", "program_number", "program", "post_position", "post"),
-    "pl": ("pl", "odds_decimal", "morning_line_decimal", "morning_line_odds", "morning_line", "odds", "odds_text"),
+    "pl": (
+        "pl",
+        "odds_decimal",
+        "morning_line_decimal",
+        "morning_line_odds",
+        "morning_line",
+        "odds",
+        "odds_text",
+    ),
     "style": ("style", "running_style", "run_style"),
     "trainer": ("trainer", "trainer_name"),
     "ep1": ("ep1", "early_pace", "early_pace_figure", "pace_1"),
     "lp": ("lp", "late_pace", "late_pace_figure", "late_pace_rating"),
     "avgspd": ("avgspd", "average_speed", "avg_speed", "average_speed_figure"),
-    "avgdist": ("avgdist", "average_distance", "distance_rating", "avg_distance_figure"),
+    "avgdist": (
+        "avgdist",
+        "average_distance",
+        "distance_rating",
+        "avg_distance_figure",
+    ),
     "bestspd": ("bestspd", "best_speed", "best_speed_figure"),
     "primepower": ("primepower", "prime_power", "prime_power_rating", "class_rating"),
     "lastclass": ("lastclass", "last_class", "last_class_figure"),
@@ -73,13 +86,23 @@ HISTORY_ALIASES = {
     "class": ("class_figure", "class_rating", "class", "race_class", "level", "grade"),
     "distance": ("distance_f", "distance_furlongs", "distance", "race_distance"),
     "surface": ("surface", "track_surface"),
-    "early_pos": ("first_call_position", "early_position", "position_1c", "call1_position", "start_position"),
-    "stretch_pos": ("stretch_position", "position_stretch", "stretch_call_position", "position_2c"),
+    "early_pos": (
+        "first_call_position",
+        "early_position",
+        "position_1c",
+        "call1_position",
+        "start_position",
+    ),
+    "stretch_pos": (
+        "stretch_position",
+        "position_stretch",
+        "stretch_call_position",
+        "position_2c",
+    ),
     "speed": ("speed", "speed_figure", "equibase_speed", "speed_rating"),
     "early": ("ep1", "early_pace", "early_pace_figure", "pace_1", "first_call_figure"),
     "late": ("lp", "late_pace", "late_pace_figure", "late_pace_rating"),
 }
-
 
 
 def first(obj, names):
@@ -132,14 +155,26 @@ def distance_to_furlongs(value):
     if direct is not None:
         return direct
     word_numbers = {
-        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-        "eleven": 11, "twelve": 12,
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+        "eleven": 11,
+        "twelve": 12,
     }
     numeric_furlongs = re.search(r"\b(\d+(?:\.\d+)?)\s*furlongs?\b", text)
     if numeric_furlongs:
         return float(numeric_furlongs.group(1))
-    match = re.search(r"\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+furlongs?\b", text)
+    match = re.search(
+        r"\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+furlongs?\b",
+        text,
+    )
     if match:
         return float(word_numbers[match.group(1)])
     if "mile" in text or re.search(r"\b1m\b", text):
@@ -175,7 +210,9 @@ def as_numeric_list(value):
 
 
 def get_history(horse):
-    history = first(horse, ("past_performances", "recent_races", "race_history", "history"))
+    history = first(
+        horse, ("past_performances", "recent_races", "race_history", "history")
+    )
     return history if isinstance(history, list) else []
 
 
@@ -269,8 +306,18 @@ def derive_raw_pp_proxies(out, horse, current_distance=None, current_surface=Non
         for race, score in zip(records, [_finish_score(r) for r in records]):
             rd = distance_to_furlongs(_history_value(race, "distance"))
             rs = str(_history_value(race, "surface") or "").lower()
-            surface_ok = not current_surface or not rs or ("turf" in current_surface) == ("turf" in rs or "grass" in rs)
-            if score is not None and rd is not None and current_distance is not None and abs(rd - current_distance) <= 1.0 and surface_ok:
+            surface_ok = (
+                not current_surface
+                or not rs
+                or ("turf" in current_surface) == ("turf" in rs or "grass" in rs)
+            )
+            if (
+                score is not None
+                and rd is not None
+                and current_distance is not None
+                and abs(rd - current_distance) <= 1.0
+                and surface_ok
+            ):
                 matching.append(score)
         chosen = matching or performances
         if chosen:
@@ -309,7 +356,9 @@ def derive_raw_pp_proxies(out, horse, current_distance=None, current_surface=Non
         field = number(_history_value(race, "field"))
         if early is not None:
             denominator = max((field or early) - 1.0, 1.0)
-            early_scores.append(100.0 * max(0.0, denominator - (early - 1.0)) / denominator)
+            early_scores.append(
+                100.0 * max(0.0, denominator - (early - 1.0)) / denominator
+            )
         if stretch is not None and finish is not None:
             late_scores.append(max(-50.0, min(50.0, (stretch - finish) * 8.0)) + 50.0)
         if early is not None and finish is not None:
@@ -345,20 +394,32 @@ def derive_from_history(out, horse):
     if not history:
         return
 
-    speed_values, distance_values, class_values, early_values, late_values = [], [], [], [], []
+    speed_values, distance_values, class_values, early_values, late_values = (
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
     for race in history:
         if not isinstance(race, dict):
             continue
-        speed = number(first(race, ("speed", "speed_figure", "equibase_speed", "speed_rating")))
+        speed = number(
+            first(race, ("speed", "speed_figure", "equibase_speed", "speed_rating"))
+        )
         if speed is not None:
             speed_values.append(speed)
-        dist = number(first(race, ("distance_figure", "distance_rating", "dist_figure")))
+        dist = number(
+            first(race, ("distance_figure", "distance_rating", "dist_figure"))
+        )
         if dist is not None:
             distance_values.append(dist)
         cls = number(first(race, ("class_figure", "class_rating", "class")))
         if cls is not None:
             class_values.append(cls)
-        early = number(first(race, ("ep1", "early_pace", "early_pace_figure", "pace_1")))
+        early = number(
+            first(race, ("ep1", "early_pace", "early_pace_figure", "pace_1"))
+        )
         late = number(first(race, ("lp", "late_pace", "late_pace_figure")))
         if early is not None:
             early_values.append(early)
@@ -391,11 +452,22 @@ def convert_horse(horse, index, warnings, current_distance=None, current_surface
         value = first(horse, aliases)
         if value is None:
             continue
-        if target in {"pp", "ep1", "lp", "avgspd", "avgdist", "bestspd",
-                      "primepower", "lastclass", "avgclass"}:
+        if target in {
+            "pp",
+            "ep1",
+            "lp",
+            "avgspd",
+            "avgdist",
+            "bestspd",
+            "primepower",
+            "lastclass",
+            "avgclass",
+        }:
             parsed = number(value)
             if parsed is not None:
-                out[target] = int(parsed) if target == "pp" and parsed.is_integer() else parsed
+                out[target] = (
+                    int(parsed) if target == "pp" and parsed.is_integer() else parsed
+                )
         elif target == "pl":
             parsed = odds_to_decimal(value)
             if parsed is not None:
@@ -432,11 +504,15 @@ def convert_horse(horse, index, warnings, current_distance=None, current_surface
             if target not in out:
                 vals = as_numeric_list(first(figures, aliases))
                 if vals:
-                    out[target] = max(vals) if target == "bestspd" else (
-                        vals[0] if target == "lastclass" else average(vals)
+                    out[target] = (
+                        max(vals)
+                        if target == "bestspd"
+                        else (vals[0] if target == "lastclass" else average(vals))
                     )
         if "bestspd" not in out:
-            vals = as_numeric_list(first(figures, ("speed", "speed_figures", "speed_rating")))
+            vals = as_numeric_list(
+                first(figures, ("speed", "speed_figures", "speed_rating"))
+            )
             if vals:
                 out["bestspd"] = max(vals)
 
@@ -469,17 +545,33 @@ def convert_horse(horse, index, warnings, current_distance=None, current_surface
         return None
     # handicap.py's formulas use these keys; missing values are intentionally not fabricated.
     if "pl" not in out:
-        warnings.append(f"{out['name']}: no usable odds found; using 99 (longshot default).")
+        warnings.append(
+            f"{out['name']}: no usable odds found; using 99 (longshot default)."
+        )
         out["pl"] = 99
     if "pp" not in out:
         warnings.append(f"{out['name']}: no program/post number found; omitting pp.")
     if "trainer" not in out:
-        warnings.append(f"{out['name']}: trainer missing; handicap.py will use its default trainer tier.")
+        warnings.append(
+            f"{out['name']}: trainer missing; handicap.py will use its default trainer tier."
+        )
     if "style" not in out:
-        warnings.append(f"{out['name']}: running style missing; provide E, E/P, P, or S for better scoring.")
-    for field in ("ep1", "lp", "avgspd", "avgdist", "bestspd", "primepower", "lastclass"):
+        warnings.append(
+            f"{out['name']}: running style missing; provide E, E/P, P, or S for better scoring."
+        )
+    for field in (
+        "ep1",
+        "lp",
+        "avgspd",
+        "avgdist",
+        "bestspd",
+        "primepower",
+        "lastclass",
+    ):
         if field not in out:
-            warnings.append(f"{out['name']}: '{field}' could not be derived from the available past-performance data; handicap.py will use its default/last rank.")
+            warnings.append(
+                f"{out['name']}: '{field}' could not be derived from the available past-performance data; handicap.py will use its default/last rank."
+            )
     return out
 
 
@@ -490,7 +582,9 @@ def convert_race(data):
     distance = first(data, ("distance_f", "distance_furlongs", "distance"))
     distance_f = distance_to_furlongs(distance)
     if distance_f is None:
-        raise ValueError("Race distance is missing or unrecognized. Supply distance_f, e.g. 6 or 8.5.")
+        raise ValueError(
+            "Race distance is missing or unrecognized. Supply distance_f, e.g. 6 or 8.5."
+        )
     surface = str(first(data, ("surface", "track_surface")) or "dirt").strip().lower()
     if "turf" in surface or surface in {"grass", "fm", "gd turf"}:
         surface = "turf"
@@ -499,7 +593,9 @@ def convert_race(data):
 
     horses_in = first(data, ("horses", "entries", "runners"))
     if not isinstance(horses_in, list):
-        raise ValueError("Input JSON must contain a 'horses' (or 'entries'/'runners') list.")
+        raise ValueError(
+            "Input JSON must contain a 'horses' (or 'entries'/'runners') list."
+        )
     warnings = []
     horses_out = []
     for i, horse in enumerate(horses_in, 1):
@@ -508,14 +604,24 @@ def convert_race(data):
             horses_out.append(converted)
     if not horses_out:
         raise ValueError("No valid named horses were found.")
-    return {"name": str(race_name), "distance_f": distance_f, "surface": surface,
-            "horses": horses_out}, warnings
+    return {
+        "name": str(race_name),
+        "distance_f": distance_f,
+        "surface": surface,
+        "horses": horses_out,
+    }, warnings
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert past-performance JSON to handicap.py race JSON.")
-    parser.add_argument("input_json", help="JSON extracted from the past-performance PDF")
-    parser.add_argument("-o", "--output", help="Output race JSON path (default: stdout)")
+    parser = argparse.ArgumentParser(
+        description="Convert past-performance JSON to handicap.py race JSON."
+    )
+    parser.add_argument(
+        "input_json", help="JSON extracted from the past-performance PDF"
+    )
+    parser.add_argument(
+        "-o", "--output", help="Output race JSON path (default: stdout)"
+    )
     args = parser.parse_args()
 
     try:

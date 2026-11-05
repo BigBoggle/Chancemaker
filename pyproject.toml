@@ -1,8 +1,7 @@
 [project]
 name = "Chancemaker"
 version = "0.0.1"
-requires-python = ">=3.11"
-
+requires-python = ">=3.14"
 
 dependencies = [
     "flask>=3.1,<4",
@@ -11,13 +10,19 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "flake8",
-  "Flake8-pyproject",
-  "pytest>=8.0",
+    "black>=25.1",
+    "flake8",
+    "Flake8-pyproject",
+    "pytest>=8.0",
+    "pyright",
 ]
 
+[tool.black]
+line-length = 88
+target-version = ["py314"]
+
 [tool.pyright]
-venv = "python-3.14"
+pythonVersion = "3.14"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -26,6 +31,18 @@ python_functions = ["test_*"]
 addopts = "-v"
 
 [tool.flake8]
-max-line-length = 127
+max-line-length = 88
 max-complexity = 10
-exclude = [".git", "__pycache__", ".venv"]
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    ".pytest_cache",
+]
+extend-ignore = ["E203", "W503", "E701", "E704"]
+count = true
+show-source = true
+statistics = true

@@ -1,4 +1,13 @@
-# UKY-CS498-Project
+# UKY-CS498-Project - Chancemaker
+
+```text
+           ,--,
+     _ ___/ /\|
+ ,;'( )__, )  ~
+//  //   '--; 
+'   \     | ^
+     ^    ^
+```
 
 Project Members:
 - Ezekiel Boggs
