@@ -78,8 +78,6 @@ class Race(db.Model):
         self.race_distance_f = race_distance_f
         self.race_track = race_track
 
-        # TODO: Finish Constructors
-
 
 class Horse(db.Model):
     horse_id: Mapped[int] = mapped_column(primary_key=True, unique=True, nullable=False)
