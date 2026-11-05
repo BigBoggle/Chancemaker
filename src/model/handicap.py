@@ -7,12 +7,12 @@ Reads and writes the handicap_output.jsonc layout: a list of races, each with a
 horse; everything else in the file is echoed back as it was read.
 
 Usage:
-    python handicap.py                       # auto-run: finds handicap_output.jsonc and updates it
-                                             # where it is (v8)
-    python handicap.py path/to/race.jsonc    # scores that file and updates it where it is
-    python handicap.py race.jsonc --v9       # same, using the v9 shadow model
-    python handicap.py race.jsonc --out p    # write to a different path instead of in place
-    python handicap.py race.jsonc --text     # printed table + confidence instead of JSONC
+python handicap.py                       # auto-run: finds handicap_output.jsonc
+                                         # and updates it where it is (v8)
+python handicap.py path/to/race.jsonc    # scores that file and updates it where it is
+python handicap.py race.jsonc --v9       # same, using the v9 shadow model
+python handicap.py race.jsonc --out p    # write to a different path instead of in place
+python handicap.py race.jsonc --text     # printed table + confidence instead of JSONC
 
 With no path, handicap_output.jsonc is looked for in the current folder, then next
 to this script, then in a tests/ folder beside this script's folder.
@@ -913,7 +913,6 @@ def out_race_horse_class(p, ind):
 def out_race_horse_pace(p, ind):
     """Output line(s) for race horse pace."""
     # Kept exactly as the file has it: brackets around key/value pairs.
-    # (Not valid JSON/JSONC; swap "[" / "]" for "{" / "}" here if you ever want it to be.)
     pace = _pace(p)
     if not pace:
         return None

@@ -1,8 +1,8 @@
 # UKY-CS498-Project - Chancemaker
 
 ```text
-           ,--,
-     _ ___/ /\|
+           ,--,        Chancemaker - a Prediction Engine and Database
+     _ ___/ /\|        for Horse Racing.
  ,;'( )__, )  ~
 //  //   '--; 
 '   \     | ^

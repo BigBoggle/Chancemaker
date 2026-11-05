@@ -1,18 +1,16 @@
-import pytest
-import json
-
 from pathlib import Path
 from database.race_db import RaceDB
-from database.race_db_model import (
-    Track,
-    Race,
-    Horse,
-    Jockey,
-    Entry,
-    Prediction,
-    Seasons,
-    RunningStyle,
-)
+
+# from database.race_db_model import (
+#     Track,
+#     Race,
+#     Horse,
+#     Jockey,
+#     Entry,
+#     Prediction,
+#     Seasons,
+#     RunningStyle,
+# )
 
 # Test Cases for the database
 
