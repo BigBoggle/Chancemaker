@@ -6,6 +6,7 @@
   --accent-border-color: #4f5165;
   --accent-color-1: #547aa5;
   --accent-color-2: #50d8d7;
+  --accent-color-3: #506089;
   --text-fg-color-1: #e9e9e9;
 
   --primary-body-font: "CommitMonoNerdFont", monospace;
@@ -13,13 +14,13 @@
 
 @font-face {
   font-family: "CommitMonoNerdFont";
-  src: url("./fonts/CommitMonoNerdFont-Regular.otf") format("opentype");
+  src: url("../fonts/CommitMonoNerdFont-Regular.otf") format("opentype");
   font-style: normal;
 }
 
 @font-face {
   font-family: "CommitMonoNerdFont";
-  src: url("./fonts/CommitMonoNerdFont-Bold.otf") format("opentype");
+  src: url("../fonts/CommitMonoNerdFont-Bold.otf") format("opentype");
   font-weight: bold;
 }
 
@@ -41,6 +42,18 @@ th {
   text-align: left;
   color: var(--accent-color-2);
   border-bottom: 2px solid var(--text-fg-color-1);
+}
+
+th:hover {
+  color: var(--accent-color-1);
+}
+
+th.sorted-column[data-direction="asc"]::after {
+  content: " ▲";
+}
+
+th.sorted-column[data-direction="desc"]::after {
+  content: " ▼";
 }
 
 tr {
