@@ -1,14 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
   <meta charset="UTF-8">
-  <meta name="viewport">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Chancemaker App{% endblock %}</title>
-
-  <!-- Add CSS Later -->  
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="{{ url_for('static', filename='js/loadRaces.js') }}" defer></script>
   <body>
     <main>
       {% block content %}{% endblock %}
     </main>
+    <footer>
+      <p>
+       *Disclaimer - This website and its associated predictions are for informational and educational purposes only. The predictions presented do not constitute as legal or investment advice.
+      </p>
+    </footer>
   </body>
 </html>
 
