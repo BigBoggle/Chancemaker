@@ -1,4 +1,4 @@
-# UKY-CS498-Project - Chancemaker
+# UKY CS498 Senior Project - Chancemaker
 
 ```text
            ,--,        Chancemaker - a Prediction Engine and Database
@@ -8,8 +8,9 @@
 '   \     | ^
      ^    ^
 ```
+[![Python CI](https://github.com/BigBoggle/Chancemaker/actions/workflows/python-app.yml/badge.svg)](https://github.com/BigBoggle/Chancemaker/actions/workflows/python-app.yml)
 
-Project Members:
+## Project Members:
 - Ezekiel Boggs
 - Jace Bennett
 - Jameson Wells
@@ -20,17 +21,14 @@ Project Members:
 
 ### Dev Environment
 ```shell
-# All of the Dependencies are in the pyproject.toml
+# All of the dependencies are in the pyproject.toml
 pip install -e .
 
 ```
-
-#### Unit Testing
-
-Testing dependencies are optional to install for the environment.
+#### Optional Dependencies
 
 ```shell
-  
+# To install optional dependencies not needed to run the project, run
 pip install '.[dev]'
 
 ```
