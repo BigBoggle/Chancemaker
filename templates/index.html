@@ -3,9 +3,10 @@
 {% block title %}Chancemaker Home Page{% endblock %}
 
 {% block content %}
-<h1>Chancemaker predictions</h1>
+<h1>Chancemaker Predictions</h1>
     <div id="raceContainer" class="loading">Loading...</div>
     <script> // Allows the inside here to be executable javaScript
+// TODO: Upon clicking each th,the table should sort by that category, be it alphabetically or by some numeric order
         async function loadRaces() {
             try { //Try so in case it fails it automatically umps to catch\
               const response = await fetch('/races'); // Fetches our JSON from localhost:5000/races
@@ -46,7 +47,7 @@
                       <table>
                           <thead>
                               <tr>
-                                  <th>Prog #</th>
+                                  <th>Program #</th>
                                   <th>Horse</th>
                                   <th>Trainer</th>
                                   <th>Jockey</th>
@@ -54,7 +55,7 @@
                                   <th>Odds</th>
                                   <th>Speed</th>
                                   <th>Rank</th>
-                                  <th>Win Prob</th>
+                                  <th>Probability</th>
                               </tr>
                           </thead>
                           <tbody>

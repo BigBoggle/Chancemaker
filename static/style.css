@@ -1,0 +1,57 @@
+/* Primary color palette */
+:root {
+  /* TODO: Add dark/light mode support */
+  --primary-bg-color: #293132;
+  --secondary-bg-color: #474044;
+  --accent-border-color: #4f5165;
+  --accent-color-1: #547aa5;
+  --accent-color-2: #50d8d7;
+  --text-fg-color-1: #e9e9e9;
+
+  --primary-body-font: "CommitMonoNerdFont", monospace;
+}
+
+@font-face {
+  font-family: "CommitMonoNerdFont";
+  src: url("./fonts/CommitMonoNerdFont-Regular.otf") format("opentype");
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "CommitMonoNerdFont";
+  src: url("./fonts/CommitMonoNerdFont-Bold.otf") format("opentype");
+  font-weight: bold;
+}
+
+html {
+}
+
+body {
+  font-family: var(--primary-body-font);
+  color: var(--text-fg-color-1);
+  background-color: var(--primary-bg-color);
+}
+
+h1 {
+  color: var(--accent-color-2);
+  font-weight: bold;
+}
+
+th {
+  text-align: left;
+  color: var(--accent-color-2);
+  border-bottom: 2px solid var(--text-fg-color-1);
+}
+
+tr {
+  text-align: left;
+}
+
+table {
+  border: 2px solid var(--accent-border-color);
+  background-color: var(--secondary-bg-color);
+  width: 100%;
+}
+
+div .loading {
+}
