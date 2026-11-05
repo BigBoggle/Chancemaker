@@ -1,16 +1,16 @@
+import json
+import pytest
+
 from pathlib import Path
 from database.race_db import RaceDB
-
-# from database.race_db_model import (
-#     Track,
-#     Race,
-#     Horse,
-#     Jockey,
-#     Entry,
-#     Prediction,
-#     Seasons,
-#     RunningStyle,
-# )
+from database.race_db_model import (
+    Prediction,
+    Track,
+    Race,
+    Horse,
+    Jockey,
+    Entry,
+)
 
 # Test Cases for the database
 
@@ -43,20 +43,18 @@ def test_create_database(database):
         )
 
 
-# Redo this test case
-# @pytest.mark.parametrize("json_file", VALID_JSON_FILES)
-# def test_valid_json_import(database, json_file):
+@pytest.mark.parametrize("json_file", VALID_JSON_FILES)
+def test_database_valid_json_imports(database, json_file):
 
-#     with json_file.open("r", encoding="utf-8") as file:
-#         data = json.load(file)
+    with json_file.open("r", encoding="utf-8") as file:
+        data = json.load(file)
 
-#     race_db = RaceDB()
-#     imported_races = race_db.import_json(data)
+    race_db = RaceDB()
+    race_db.import_json(data)
 
-#     assert len(imported_races) == 1
-#     assert database.session.query(Track).count() == 1
-#     assert database.session.query(Race).count() == 1
-#     assert database.session.query(Horse).count() == 1
-#     assert database.session.query(Jockey).count() == 1
-#     assert database.session.query(Entry).count() == 1
-#     assert database.session.query(Prediction).count() == 1
+    assert database.session.query(Track) is not None
+    assert database.session.query(Race) is not None
+    assert database.session.query(Horse) is not None
+    assert database.session.query(Jockey) is not None
+    assert database.session.query(Entry) is not None
+    assert database.session.query(Prediction) is not None

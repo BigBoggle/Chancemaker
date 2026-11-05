@@ -10,21 +10,23 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "black>=25.1",
+    "black",
     "flake8",
     "Flake8-pyproject",
-    "pytest>=8.0",
+    "pytest",
     "pyright",
+    "pre-commit",
 ]
 
 [tool.black]
-line-length = 88
+line-length = 90
 target-version = ["py314"]
 
 [tool.pyright]
 pythonVersion = "3.14"
 include = ["src", "tests"]
 exclude = ["build", "**/__pycache__", ".direnv", ".venv"]
+typeCheckingMode = "standard"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -33,7 +35,7 @@ python_functions = ["test_*"]
 addopts = "-v"
 
 [tool.flake8]
-max-line-length = 88
+max-line-length = 90
 max-complexity = 10
 exclude = [
     ".git",
