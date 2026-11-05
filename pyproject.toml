@@ -11,7 +11,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
+  "flake8",
+  "Flake8-pyproject",
+  "pytest>=8.0",
 ]
 
 [tool.pyright]
@@ -22,3 +24,8 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v"
+
+[tool.flake8]
+max-line-length = 127
+max-complexity = 10
+exclude = [".git", "__pycache__", ".venv"]
