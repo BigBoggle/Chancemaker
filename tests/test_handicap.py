@@ -2,7 +2,9 @@ import sys
 import os
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/model')))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src/model"))
+)
 
 from handicap import (
     tbl,
@@ -106,11 +108,31 @@ def test_confidence_calculations():
     assert conf_margin(res_low) == 0.1
 
     assert conf_agreement([("A", 80), ("B", 70)], [("A", 80), ("B", 70)]) == 1.0
-    assert conf_data([{"ep1": 90, "lp": 80, "avgspd": 85, "avgdist": 80, "primepower": 85, "lastclass": 80, "pl": 3, "trainer": "baffert"}]) == 1.0
+    assert (
+        conf_data(
+            [
+                {
+                    "ep1": 90,
+                    "lp": 80,
+                    "avgspd": 85,
+                    "avgdist": 80,
+                    "primepower": 85,
+                    "lastclass": 80,
+                    "pl": 3,
+                    "trainer": "baffert",
+                }
+            ]
+        )
+        == 1.0
+    )
     assert conf_field(5) == 1.0
     assert conf_field(15) == 0.4
 
-    horses_duel = [{"name": "A", "ep1": 90}, {"name": "B", "ep1": 89}, {"name": "C", "ep1": 88}]
+    horses_duel = [
+        {"name": "A", "ep1": 90},
+        {"name": "B", "ep1": 89},
+        {"name": "C", "ep1": 88},
+    ]
     assert conf_pace(horses_duel) == 0.4
 
     assert confidence_label(75) == "HIGH"
@@ -180,4 +202,3 @@ def test_score_race():
     assert kind == "sprint"
     assert len(res) == 2
     assert res[0][1] >= res[1][1]
-    
