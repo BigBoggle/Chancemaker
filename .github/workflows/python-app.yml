@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   quality:
-    name: Formatting and linting
+    name: Code-Quality 
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -51,7 +51,7 @@ jobs:
         run: pytest
 
   build:
-    name: Build verification
+    name: Build 
     runs-on: ubuntu-latest
 
     steps:

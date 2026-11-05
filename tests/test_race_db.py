@@ -38,9 +38,7 @@ def test_create_database(database):
     tables = database.metadata.tables.keys()
 
     for table in tables:
-        assert table in database.engine.dialect.get_table_names(
-            database.engine.connect()
-        )
+        assert table in database.engine.dialect.get_table_names(database.engine.connect())
 
 
 @pytest.mark.parametrize("json_file", VALID_JSON_FILES)
