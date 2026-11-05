@@ -411,17 +411,13 @@ def derive_from_history(out, horse):
         )
         if speed is not None:
             speed_values.append(speed)
-        dist = number(
-            first(race, ("distance_figure", "distance_rating", "dist_figure"))
-        )
+        dist = number(first(race, ("distance_figure", "distance_rating", "dist_figure")))
         if dist is not None:
             distance_values.append(dist)
         cls = number(first(race, ("class_figure", "class_rating", "class")))
         if cls is not None:
             class_values.append(cls)
-        early = number(
-            first(race, ("ep1", "early_pace", "early_pace_figure", "pace_1"))
-        )
+        early = number(first(race, ("ep1", "early_pace", "early_pace_figure", "pace_1")))
         late = number(first(race, ("lp", "late_pace", "late_pace_figure")))
         if early is not None:
             early_values.append(early)
@@ -618,12 +614,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Convert past-performance JSON to handicap.py race JSON."
     )
-    parser.add_argument(
-        "input_json", help="JSON extracted from the past-performance PDF"
-    )
-    parser.add_argument(
-        "-o", "--output", help="Output race JSON path (default: stdout)"
-    )
+    parser.add_argument("input_json", help="JSON extracted from the past-performance PDF")
+    parser.add_argument("-o", "--output", help="Output race JSON path (default: stdout)")
     args = parser.parse_args()
 
     try:
