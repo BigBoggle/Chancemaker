@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Convert a structured JSON extraction of a horse-racing past-performance PDF
 into the race JSON format accepted by handicap.py.
