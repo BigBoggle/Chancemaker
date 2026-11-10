@@ -82,9 +82,7 @@ class Race(db.Model):
 class Horse(db.Model):
     horse_id: Mapped[int] = mapped_column(primary_key=True, unique=True, nullable=False)
     horse_name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
-    horse_trainer: Mapped[str] = mapped_column(
-        String(120), unique=False, nullable=False
-    )
+    horse_trainer: Mapped[str] = mapped_column(String(120), unique=False, nullable=False)
     horse_description: Mapped[str] = mapped_column(
         String(120), unique=False, nullable=True
     )
@@ -126,9 +124,7 @@ class Entry(db.Model):
 
     entry_id: Mapped[int] = mapped_column(primary_key=True)
 
-    entry_race_id: Mapped[int] = mapped_column(
-        ForeignKey("race.race_id"), nullable=False
-    )
+    entry_race_id: Mapped[int] = mapped_column(ForeignKey("race.race_id"), nullable=False)
 
     entry_horse_id: Mapped[int] = mapped_column(
         ForeignKey("horse.horse_id"), nullable=False

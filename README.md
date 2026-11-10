@@ -22,14 +22,7 @@
 ### Dev Environment
 ```shell
 # All of the dependencies are in the pyproject.toml
-pip install -e .
+pip install -e ".[dev]"
+pre-commit install
 
 ```
-#### Optional Dependencies
-
-```shell
-# To install optional dependencies not needed to run the project, run
-pip install '.[dev]'
-
-```
-
