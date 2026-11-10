@@ -1,8 +1,5 @@
 """Tests for handicap.py: scoring, confidence, JSONC reading/writing, CLI."""
 
-# One test per function makes this long; the size limit is not useful here.
-# pylint: disable=too-many-lines
-
 from __future__ import annotations
 
 import json
@@ -12,8 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, cast
 
 import pytest
-
-import handicap
+from model import handicap
 
 STYLE_TAIL = "  // Subject to be on race basis"
 
