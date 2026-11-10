@@ -28,9 +28,7 @@ def lookup(cfg: dict[str, Any], key: str) -> Callable[[int], int]:
     return cast(Callable[[int], int], cfg[key])
 
 
-def result_entry(
-    name: str, total: float
-) -> tuple[str, float, dict[str, int], list[str]]:
+def result_entry(name: str, total: float) -> tuple[str, float, dict[str, int], list[str]]:
     """A scorer result row with empty parts and tags."""
     return (name, total, {}, [])
 
@@ -476,8 +474,7 @@ def test_sprint_style_points_default_and_cap() -> None:
         {"name": "D", "style": "P"},
     ]
     style = {
-        row[0]: row[2]["style"]
-        for row in handicap.score_sprint(horses, handicap.SPRINT)
+        row[0]: row[2]["style"] for row in handicap.score_sprint(horses, handicap.SPRINT)
     }
     assert style == {"A": 12, "B": 8, "C": 8, "D": 12}
 
@@ -606,9 +603,7 @@ def test_pp_sheet_foreign_floor_grades() -> None:
 
 def test_pp_sheet_speed_points_are_capped_at_26() -> None:
     """spd * 0.25 stops counting past 26 points."""
-    assert handicap.score_pp_sheet({"spd": 200}) == handicap.score_pp_sheet(
-        {"spd": 104}
-    )
+    assert handicap.score_pp_sheet({"spd": 200}) == handicap.score_pp_sheet({"spd": 104})
 
 
 def test_pp_sheet_style_points() -> None:
@@ -876,9 +871,7 @@ def test_in_race_surface() -> None:
 
 def test_in_race_participants() -> None:
     """Missing or null participants read as an empty list."""
-    assert handicap.in_race_participants({"race_participants": [{"a": 1}]}) == [
-        {"a": 1}
-    ]
+    assert handicap.in_race_participants({"race_participants": [{"a": 1}]}) == [{"a": 1}]
     assert handicap.in_race_participants({}) == []
     assert handicap.in_race_participants({"race_participants": None}) == []
 
@@ -934,9 +927,7 @@ def test_in_horse_post(raw: str | int | None, expected: int | None) -> None:
 
 def test_in_horse_morning_line() -> None:
     """Morning line is passed through."""
-    assert (
-        handicap.in_horse_morning_line({"race_horse_morning_line_number": 2.5}) == 2.5
-    )
+    assert handicap.in_horse_morning_line({"race_horse_morning_line_number": 2.5}) == 2.5
     assert handicap.in_horse_morning_line({}) is None
 
 
@@ -1305,12 +1296,9 @@ CONF = {"score": 72, "label": "HIGH", "components": {}}
 
 def test_out_model_predicted_rank() -> None:
     """Writes the rank, or null for a scratched horse."""
+    assert handicap.out_model_predicted_rank(IND, PICK) == '  "model_predicted_rank": 1,'
     assert (
-        handicap.out_model_predicted_rank(IND, PICK) == '  "model_predicted_rank": 1,'
-    )
-    assert (
-        handicap.out_model_predicted_rank(IND, None)
-        == '  "model_predicted_rank": null,'
+        handicap.out_model_predicted_rank(IND, None) == '  "model_predicted_rank": null,'
     )
 
 
@@ -1580,9 +1568,7 @@ def test_main_updates_file_in_place(
 ) -> None:
     """By default the input file is rewritten with model fields."""
     handicap.main([str(races_file)])
-    assert (
-        capsys.readouterr().out == f"Wrote 4 horses across 1 race(s) to {races_file}\n"
-    )
+    assert capsys.readouterr().out == f"Wrote 4 horses across 1 race(s) to {races_file}\n"
     assert '"model_score"' in races_file.read_text(encoding="utf-8")
 
 
@@ -1610,9 +1596,7 @@ def test_main_text_prints_table_without_writing(
     assert races_file.read_text(encoding="utf-8") == before
 
 
-def test_main_text_with_v9(
-    races_file: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_text_with_v9(races_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """--v9 switches the printed table to the shadow model."""
     handicap.main([str(races_file), "--text", "--v9"])
     assert "SPRINT v9" in capsys.readouterr().out
