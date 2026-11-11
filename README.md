@@ -22,7 +22,12 @@
 ### Dev Environment
 ```shell
 # All of the dependencies are in the pyproject.toml
-pip install -e ".[dev]"
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .'[dev]'
 pre-commit install
+
+# Or if direnv is installed
+direnv allow
 
 ```
