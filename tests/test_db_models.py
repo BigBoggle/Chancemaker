@@ -111,7 +111,7 @@ def test_create_entry(database):
 
     assert saved_entry is not None
     assert saved_entry.entry_race.race_track.track_name == "Keeneland"
-    assert saved_entry.entry_scratched == False
+    assert saved_entry.entry_scratched is False
     assert saved_entry.entry_horse.horse_name == "Thunder Strike"
     assert saved_entry.entry_jockey.jockey_name == "Alex Johnson"
 
@@ -164,6 +164,6 @@ def test_create_prediction(database):
     saved_prediction = database.session.get(Prediction, prediction.prediction_id)
 
     assert saved_prediction is not None
-    assert saved_prediction.prediction_is_winner == True
+    assert saved_prediction.prediction_is_winner is True
     assert saved_prediction.prediction_score == 97
     assert saved_prediction.prediction_win_probability == 0.525

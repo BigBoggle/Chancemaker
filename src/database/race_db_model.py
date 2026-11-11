@@ -78,15 +78,11 @@ class Race(db.Model):
         self.race_distance_f = race_distance_f
         self.race_track = race_track
 
-        # TODO: Finish Constructors
-
 
 class Horse(db.Model):
     horse_id: Mapped[int] = mapped_column(primary_key=True, unique=True, nullable=False)
     horse_name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
-    horse_trainer: Mapped[str] = mapped_column(
-        String(120), unique=False, nullable=False
-    )
+    horse_trainer: Mapped[str] = mapped_column(String(120), unique=False, nullable=False)
     horse_description: Mapped[str] = mapped_column(
         String(120), unique=False, nullable=True
     )
@@ -128,9 +124,7 @@ class Entry(db.Model):
 
     entry_id: Mapped[int] = mapped_column(primary_key=True)
 
-    entry_race_id: Mapped[int] = mapped_column(
-        ForeignKey("race.race_id"), nullable=False
-    )
+    entry_race_id: Mapped[int] = mapped_column(ForeignKey("race.race_id"), nullable=False)
 
     entry_horse_id: Mapped[int] = mapped_column(
         ForeignKey("horse.horse_id"), nullable=False
@@ -166,7 +160,7 @@ class Entry(db.Model):
         entry_race: Race,
         entry_horse: Horse,
         entry_jockey: Jockey,
-        entry_predictions: list[Prediction] | None = None,
+        entry_predictions: list["Prediction"] | None = None,
         entry_program_number: int,
         entry_morning_line_odds: float,
         entry_running_style: RunningStyle,

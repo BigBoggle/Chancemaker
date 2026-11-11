@@ -1,8 +1,7 @@
 [project]
-name = "SomeProject"
+name = "Chancemaker"
 version = "0.0.1"
-requires-python = ">=3.11"
-
+requires-python = ">=3.14"
 
 dependencies = [
     "flask>=3.1,<4",
@@ -11,14 +10,47 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
+    "black",
+    "flake8",
+    "Flake8-pyproject",
+    "pytest",
+    "pyright",
+    "pre-commit",
 ]
 
+[tool.black]
+line-length = 90
+target-version = ["py314"]
+
 [tool.pyright]
-venv = "python-3.14"
+pythonVersion = "3.14"
+include = ["src", "tests"]
+exclude = ["build", "**/__pycache__", ".direnv", ".venv"]
+typeCheckingMode = "standard"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v"
+
+[tool.flake8]
+max-line-length = 90
+max-complexity = 10
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    ".pytest_cache",
+]
+extend-ignore = ["E203", "W503", "E701", "E704"]
+per-file-ignores = [
+    "src/model/pp_json_to_handicap.py:C901,E501",
+    "src/model/handicap.py:E501",
+]
+count = true
+show-source = true
+statistics = true

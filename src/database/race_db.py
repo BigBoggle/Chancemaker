@@ -36,12 +36,11 @@ def _parse_running_style(value: str) -> RunningStyle:
         )
 
 
-# Database Class for Races, which takes valid JSON inputs and imports them into the SQL DB.
+# Database Class for Races, which takes valid JSON inputs
+# and imports them into the SQL DB.
 class RaceDB:
     def __init__(self):
         self.db = db
-
-    # TODO: create functions to create database from json input.
 
     def create_database(self):
         self.db.create_all()
