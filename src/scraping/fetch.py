@@ -21,7 +21,10 @@ What it does, for one race date:
 
 Files go to <out>/<YYYY-MM-DD>/ (default out: src/scraping/downloads, which the repo's
 .gitignore already ignores):
-    program.pdf, chart.pdf, card.json, check.json
+    program.pdf, chart.pdf,
+    card.json             the whole day, essentials only (see pdf_reading.slim_card)
+    race1.json, ...       one race each, the input pp_json_to_handicap.py expects
+    check.json            the check findings
 
 Needs the "requests" package (pip install requests).
 Exit code: 0 if the program was downloaded, parsed and passed the checks; 1 otherwise.
@@ -40,6 +43,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_parser  # noqa: E402  (needs the path above)
+import pdf_reading  # noqa: E402
 
 PROGRAM_URL = (
     "https://www.keeneland.com/files/programs/{m}-{d}-{yy}-kee-online-programpdf.pdf"
@@ -94,6 +98,12 @@ def download_pdf(url, dest):
     return True, f"saved {dest} ({len(resp.content) / 1e6:.1f} MB)"
 
 
+def write_json(path, data):
+    path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+
 def fetch(day, out_root, get_chart=True):
     folder = Path(out_root) / day.isoformat()
     folder.mkdir(parents=True, exist_ok=True)
@@ -117,25 +127,25 @@ def fetch(day, out_root, get_chart=True):
         )
         return False
 
-    # Parse the program and check the result before anyone relies on it.
-    rep, card = check_parser.check_pdf(folder / "program.pdf")
-    if card is None:
-        print("  parse:   FAILED -- see the check output below")
-        check_parser.print_report(rep, card, verbose_info=False)
+    # 1. Build: parse the program into a card (a plain dict).
+    try:
+        card = pdf_reading.parse_pdf(folder / "program.pdf")
+    except Exception as exc:  # report the crash and stop; there is no card to save
+        print(f"  parse:   FAILED -- parse_pdf crashed: {exc!r}")
         return False
-    (folder / "card.json").write_text(
-        json.dumps(card, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
-    (folder / "check.json").write_text(
-        json.dumps(
-            [dict(zip(("level", "check", "where", "message"), f)) for f in rep.findings],
-            indent=2,
-            ensure_ascii=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    print(f"  parse:   {folder / 'card.json'}")
+    # 2. Inspect: check the card against the PDF before anyone relies on it.
+    rep = check_parser.check_card(card, folder / "program.pdf")
+    # 3. Save only the essentials: the whole day, plus one file per race that can be
+    #    handed straight to src/model/pp_json_to_handicap.py.
+    slim = pdf_reading.slim_card(card)
+    write_json(folder / "card.json", slim)
+    for race in slim["races"]:
+        write_json(folder / f"race{race['race_number']}.json", race)
+    findings = [
+        dict(zip(("level", "check", "where", "message"), f)) for f in rep.findings
+    ]
+    write_json(folder / "check.json", findings)
+    print(f"  parse:   {folder / 'card.json'} + {len(slim['races'])} race files")
     check_parser.print_report(rep, card, verbose_info=False)
     return rep.count("FAIL") == 0
 

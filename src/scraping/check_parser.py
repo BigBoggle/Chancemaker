@@ -50,40 +50,33 @@ import pdf_reading as pr  # noqa: E402  (needs the path above)
 REPO = Path(__file__).resolve().parents[2]
 CONVERTER = REPO / "src" / "model" / "pp_json_to_handicap.py"
 
-# Fields the handicap converter reads (see ALIASES / HISTORY_ALIASES in
-# pp_json_to_handicap.py).
+# The checks only care about fields that are written out (pdf_reading.slim_card);
+# a misread in a field nobody uses is not reported.
+#
+# Horse fields that must not be empty.
 MODEL_HORSE_FIELDS = ("name", "program_number", "morning_line_odds", "trainer")
+# PP-line fields the converter reads, warned about when empty. purse is left out:
+# it is blank by design on claiming and similar races (they print a claiming price).
 MODEL_LINE_FIELDS = (
     "finish_position",
     "field_size",
-    "distance_f",
-    "final_time",
-    "race_class",
-    "odds",
+    "lengths_behind",
+    "first_call_position",
+    "stretch_position",
     "speed_figure",
     "early_pace",
-    "first_call_position",
-)
-# Fields that must agree between horses whose histories contain the same earlier race.
-SHARED_RACE_FIELDS = (
     "distance_f",
     "surface",
-    "course",
-    "condition",
-    "final_time",
-    "fractions",
-    "field_size",
+    "race_class",
 )
+# Fields that must agree between horses whose histories contain the same earlier race.
+SHARED_RACE_FIELDS = ("distance_f", "surface", "field_size")
 # Glyph characters that should never survive into decoded text.
 LEFTOVER_GLYPHS = re.compile(
     "["
     + re.escape(pr.LENGTH_CHARS + "".join(pr.GLYPH_DIGITS) + pr.DEAD_HEAT_MARK + "®")
     + "]"
 )
-WORKOUT_DATE = re.compile(
-    r"\b\d{1,2} [A-Z][a-z]{2} \d{2}\b"
-)  # "4 Oct 26" (PP lines use "04Oct26")
-AGE_SEX_OK = set("0123456789gkl½j")  # decoded in parse_pp_line
 
 
 class Report:
@@ -121,22 +114,17 @@ def where(race=None, horse=None, line=None, page=None):
 # Counts taken straight from the page (independent of horse/field assignment)
 # --------------------------------------------------------------------------
 def page_counts(doc, layouts):
-    """Per page: printed PP lines, printed workouts and also-eligible markers."""
+    """Per page: printed PP lines and also-eligible markers."""
     out = {}
     for lay in layouts:
         spans = pr.page_spans(doc[lay.index], lay)
         # A PP line starts with a date like "16Aug26" at the left margin; count
         # distinct baselines.
         pp_lines = {round(s.base) for s in spans if s.x0 < 45 and pr.DATE_RE.match(s.t)}
-        workouts = sum(len(WORKOUT_DATE.findall(s.text)) for s in spans)
         markers = sum(
             1 for s in spans if s.bold and s.x0 < 30 and 10 <= s.size <= 14 and s.t == "A"
         )
-        out[lay.index + 1] = {
-            "pp_lines": len(pp_lines),
-            "workouts": workouts,
-            "ae_markers": markers,
-        }
+        out[lay.index + 1] = {"pp_lines": len(pp_lines), "ae_markers": markers}
     return out
 
 
@@ -220,14 +208,13 @@ def check_horses(rep, card):
 
 
 def check_line_counts(rep, card, counts):
-    """Printed vs parsed PP lines, workouts and also-eligible markers, per race."""
+    """Printed vs parsed PP lines and also-eligible markers, per race."""
     for r in card["races"]:
         printed = {
             k: sum(counts[p][k] for p in r["pages"] if p in counts)
-            for k in ("pp_lines", "workouts", "ae_markers")
+            for k in ("pp_lines", "ae_markers")
         }
         parsed_lines = sum(len(h["past_performances"]) for h in r["horses"])
-        parsed_wo = sum(len(h["workouts"]) for h in r["horses"])
         parsed_ae = sum(1 for h in r["horses"] if h.get("also_eligible"))
         if parsed_lines != printed["pp_lines"]:
             rep.add(
@@ -236,13 +223,6 @@ def check_line_counts(rep, card, counts):
                 where(r),
                 f"{printed['pp_lines']} PP lines printed on pages {r['pages']}, "
                 f"{parsed_lines} parsed",
-            )
-        if parsed_wo != printed["workouts"]:
-            rep.add(
-                "FAIL",
-                "workouts",
-                where(r),
-                f"{printed['workouts']} workouts printed, {parsed_wo} parsed",
             )
         if parsed_ae != printed["ae_markers"]:
             rep.add(
@@ -318,44 +298,39 @@ def check_values(rep, card):
                 _check_decoding(rep, p, at)
                 _check_plausibility(rep, p, at)
                 _check_ranges(rep, p, at)
-                if p.get("track_code") and p["track_code"] not in pr.TRACK_NAMES:
-                    rep.add(
-                        "INFO",
-                        "track names",
-                        p["track_code"],
-                        "track code has no full name in TRACK_NAMES",
-                    )
 
 
 # Lines from races abroad print no US figures and only the post and the finish.
-FOREIGN_BLANK = ("speed_figure", "early_pace", "odds", "first_call_position")
+FOREIGN_BLANK = (
+    "speed_figure",
+    "early_pace",
+    "first_call_position",
+    "stretch_position",
+)
 
 
 def _check_empty_fields(rep, p, at):
-    for k in MODEL_LINE_FIELDS:
-        if p.get(k) is None and not (p.get("foreign") and k in FOREIGN_BLANK):
-            rep.add("WARN", "empty model field", at, f"{k} is empty")
+    """One WARN per line, listing every empty field (a horse that did not finish has
+    no finish, beaten lengths or stretch call; one line is easier to read than three)."""
+    empty = [
+        k
+        for k in MODEL_LINE_FIELDS
+        if p.get(k) is None and not (p.get("foreign") and k in FOREIGN_BLANK)
+    ]
+    if empty:
+        rep.add("WARN", "empty model field", at, f"empty: {', '.join(empty)}")
 
 
 def _check_decoding(rep, p, at):
-    """Distance, course symbols, age/sex glyphs, leftover glyphs, stewards' marks."""
+    """Distance, course symbols (-> surface), leftover glyphs in the race class,
+    stewards' marks (-> finish_position)."""
     if p.get("distance") and p.get("distance_f") is None:
         rep.add("FAIL", "decoding", at, f"distance {p['distance']!r} not decoded")
     for sym in p.get("unrecognized_symbols") or []:
         rep.add("WARN", "decoding", at, f"unrecognised course symbol {sym!r}")
-    odd = set(p.get("age_sex_code") or "") - AGE_SEX_OK
-    if odd:
-        rep.add(
-            "WARN",
-            "decoding",
-            at,
-            f"unknown age/sex glyph(s) {sorted(odd)} in {p['age_sex_code']!r}",
-        )
-    texts = [p.get("comment"), p.get("jockey"), p.get("race_class"), p.get("equipment")]
-    texts += [f.get("name") for f in p.get("top_finishers") or []]
-    for t in texts:
-        if t and LEFTOVER_GLYPHS.search(t):
-            rep.add("FAIL", "decoding", at, f"undecoded glyph left in text: {t!r}")
+    t = p.get("race_class")
+    if t and LEFTOVER_GLYPHS.search(t):
+        rep.add("FAIL", "decoding", at, f"undecoded glyph left in race class: {t!r}")
     if p.get("stewards_change") == "?":
         rep.add(
             "WARN",
@@ -366,7 +341,8 @@ def _check_decoding(rep, p, at):
 
 
 def _check_plausibility(rep, p, at):
-    """Time per furlong, and finish position vs field size."""
+    """Time per furlong (catches a wrongly decoded distance_f), and finish position
+    vs field size."""
     sec, dist = p.get("final_time_seconds"), p.get("distance_f")
     if sec and dist and not 10.5 <= sec / dist <= 14.5:
         rep.add(
@@ -383,8 +359,6 @@ def _check_plausibility(rep, p, at):
 # (field, lowest plausible, highest plausible, how to show the printed value)
 RANGES = (
     ("field_size", 2, 20, lambda p: f"field size {p['field_size']}"),
-    ("weight", 100, 135, lambda p: f"weight {p['weight']}"),
-    ("odds", 0.05, 999, lambda p: f"odds {p['odds_text']}"),
     ("speed_figure", -20, 140, lambda p: f"speed figure {p['speed_figure']}"),
 )
 
@@ -416,11 +390,6 @@ def check_converter(rep, card):
 # --------------------------------------------------------------------------
 # Known-good ("golden") outputs
 # --------------------------------------------------------------------------
-def comparable(card):
-    """Drop fields that legitimately differ between runs (the file path)."""
-    return {k: v for k, v in card.items() if k != "source_pdf"}
-
-
 def diff(a, b, path, out, limit):
     if len(out) >= limit:
         return
@@ -438,6 +407,9 @@ def diff(a, b, path, out, limit):
 
 
 def compare_golden(rep, card, golden_dir):
+    """Diff the essentials of `card` (the full card) against the saved known-good
+    essentials. Only written fields are compared, so a change in a field nobody
+    uses does not show up."""
     path = Path(golden_dir) / (Path(rep.pdf).stem + ".json")
     if not path.exists():
         rep.add(
@@ -446,7 +418,7 @@ def compare_golden(rep, card, golden_dir):
         return
     old = json.loads(path.read_text(encoding="utf-8"))
     changes = []
-    diff(comparable(old), comparable(card), "card", changes, limit=40)
+    diff(old, pr.slim_card(card), "card", changes, limit=40)
     if changes:
         rep.add(
             "WARN",
@@ -460,25 +432,43 @@ def compare_golden(rep, card, golden_dir):
 
 
 # --------------------------------------------------------------------------
-def check_pdf(pdf, golden_dir=None):
+def check_card(card, pdf, golden_dir=None):
+    """Inspect a card that pdf_reading.parse_pdf already produced from `pdf`.
+
+    The PDF is opened again so the page-level checks can count horses and PP lines
+    straight from the page, independently of how the parser read them. Returns a
+    Report; the caller decides what to do with FAILs (fetch.py, for example, exits 1).
+    """
     rep = Report(pdf)
-    try:
-        card = pr.parse_pdf(pdf)
-    except Exception as exc:  # a crash is itself a finding
-        rep.add("FAIL", "parser", "", f"parse_pdf crashed: {exc!r}")
-        return rep, None
-    doc = pr.pymupdf.open(str(pdf))
-    layouts = pr.find_pp_pages(doc)
-    check_pages(rep, doc, card, layouts)
+    with pr.pymupdf.open(str(pdf)) as doc:
+        layouts = pr.find_pp_pages(doc)
+        check_pages(rep, doc, card, layouts)
+        printed_counts = page_counts(doc, layouts)  # needs the open PDF
     check_races(rep, card)
     check_horses(rep, card)
-    check_line_counts(rep, card, page_counts(doc, layouts))
+    check_line_counts(rep, card, printed_counts)
     check_shared_races(rep, card)
     check_values(rep, card)
     check_converter(rep, card)
     if golden_dir:
         compare_golden(rep, card, golden_dir)
-    return rep, card
+    return rep
+
+
+def check_pdf(pdf, golden_dir=None):
+    """Parse `pdf` and check the result: the command-line path (see main()).
+
+    A parser crash is turned into a FAIL finding instead of stopping the run, so a
+    batch of PDFs still gets a report for every file. Returns (Report, card), with
+    card None when the parser crashed.
+    """
+    try:
+        card = pr.parse_pdf(pdf)
+    except Exception as exc:  # a crash is itself a finding
+        rep = Report(pdf)
+        rep.add("FAIL", "parser", "", f"parse_pdf crashed: {exc!r}")
+        return rep, None
+    return check_card(card, pdf, golden_dir), card
 
 
 def print_report(rep, card, verbose_info):
@@ -549,7 +539,8 @@ def main(argv=None):
             out = Path(args.save_golden)
             out.mkdir(parents=True, exist_ok=True)
             (out / (Path(pdf).stem + ".json")).write_text(
-                json.dumps(card, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+                json.dumps(pr.slim_card(card), indent=1, ensure_ascii=False) + "\n",
+                encoding="utf-8",
             )
             print(f"    saved known-good output to {out / (Path(pdf).stem + '.json')}")
     if args.json:
