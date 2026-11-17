@@ -85,8 +85,8 @@ def download_pdf(url, dest):
         return False, f"request failed: {exc}"
     if resp.status_code != 200:
         return False, f"HTTP {resp.status_code} (not published, or no racing that day?)"
-    # Some sites answer a missing file with an HTML page and status 200; a PDF starts with
-    # "%PDF".
+    # Some sites answer a missing file with an HTML page and status 200; a PDF starts
+    # with "%PDF".
     if not resp.content.startswith(b"%PDF"):
         kind = resp.headers.get("Content-Type", "unknown type")
         return False, f"response is not a PDF ({kind}, {len(resp.content)} bytes)"

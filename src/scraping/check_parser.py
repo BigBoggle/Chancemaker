@@ -125,8 +125,8 @@ def page_counts(doc, layouts):
     out = {}
     for lay in layouts:
         spans = pr.page_spans(doc[lay.index], lay)
-        # A PP line starts with a date like "16Aug26" at the left margin; count distinct
-        # baselines.
+        # A PP line starts with a date like "16Aug26" at the left margin; count
+        # distinct baselines.
         pp_lines = {round(s.base) for s in spans if s.x0 < 45 and pr.DATE_RE.match(s.t)}
         workouts = sum(len(WORKOUT_DATE.findall(s.text)) for s in spans)
         markers = sum(
@@ -308,80 +308,16 @@ def check_shared_races(rep, card):
             )
 
 
-def check_values(rep, card):  # noqa: C901  (split later)
+def check_values(rep, card):
+    """Per PP line: empty model fields, decoding problems and implausible values."""
     for r in card["races"]:
         for h in r["horses"]:
             for p in h["past_performances"]:
                 at = where(r, h, p)
-                # Lines from races abroad print no US figures and only the post and the
-                # finish.
-                foreign_blank = (
-                    "speed_figure",
-                    "early_pace",
-                    "odds",
-                    "first_call_position",
-                )
-                for k in MODEL_LINE_FIELDS:
-                    if p.get(k) is None and not (p.get("foreign") and k in foreign_blank):
-                        rep.add("WARN", "empty model field", at, f"{k} is empty")
-                if p.get("distance") and p.get("distance_f") is None:
-                    rep.add(
-                        "FAIL", "decoding", at, f"distance {p['distance']!r} not decoded"
-                    )
-                for sym in p.get("unrecognized_symbols") or []:
-                    rep.add("WARN", "decoding", at, f"unrecognised course symbol {sym!r}")
-                odd = set(p.get("age_sex_code") or "") - AGE_SEX_OK
-                if odd:
-                    rep.add(
-                        "WARN",
-                        "decoding",
-                        at,
-                        f"unknown age/sex glyph(s) {sorted(odd)} "
-                        f"in {p['age_sex_code']!r}",
-                    )
-                texts = [
-                    p.get("comment"),
-                    p.get("jockey"),
-                    p.get("race_class"),
-                    p.get("equipment"),
-                ]
-                texts += [f.get("name") for f in p.get("top_finishers") or []]
-                for t in texts:
-                    if t and LEFTOVER_GLYPHS.search(t):
-                        rep.add(
-                            "FAIL", "decoding", at, f"undecoded glyph left in text: {t!r}"
-                        )
-                if p.get("stewards_change") == "?":
-                    rep.add(
-                        "WARN",
-                        "decoding",
-                        at,
-                        "'*' (stewards' change) printed but no DQ/PL in the comment",
-                    )
-                sec, dist = p.get("final_time_seconds"), p.get("distance_f")
-                if sec and dist and not 10.5 <= sec / dist <= 14.5:
-                    rep.add(
-                        "WARN",
-                        "plausibility",
-                        at,
-                        f"{p['final_time']} for {dist}f = {sec / dist:.1f} s/furlong",
-                    )
-                fs, fin = p.get("field_size"), p.get("finish_position")
-                if fs is not None and not 2 <= fs <= 20:
-                    rep.add("WARN", "plausibility", at, f"field size {fs}")
-                if fs and fin and fin > fs:
-                    rep.add("WARN", "plausibility", at, f"finish {fin} > field size {fs}")
-                if p.get("weight") is not None and not 100 <= p["weight"] <= 135:
-                    rep.add("WARN", "plausibility", at, f"weight {p['weight']}")
-                if p.get("odds") is not None and not 0.05 <= p["odds"] <= 999:
-                    rep.add("WARN", "plausibility", at, f"odds {p['odds_text']}")
-                if (
-                    p.get("speed_figure") is not None
-                    and not -20 <= p["speed_figure"] <= 140
-                ):
-                    rep.add(
-                        "WARN", "plausibility", at, f"speed figure {p['speed_figure']}"
-                    )
+                _check_empty_fields(rep, p, at)
+                _check_decoding(rep, p, at)
+                _check_plausibility(rep, p, at)
+                _check_ranges(rep, p, at)
                 if p.get("track_code") and p["track_code"] not in pr.TRACK_NAMES:
                     rep.add(
                         "INFO",
@@ -389,6 +325,74 @@ def check_values(rep, card):  # noqa: C901  (split later)
                         p["track_code"],
                         "track code has no full name in TRACK_NAMES",
                     )
+
+
+# Lines from races abroad print no US figures and only the post and the finish.
+FOREIGN_BLANK = ("speed_figure", "early_pace", "odds", "first_call_position")
+
+
+def _check_empty_fields(rep, p, at):
+    for k in MODEL_LINE_FIELDS:
+        if p.get(k) is None and not (p.get("foreign") and k in FOREIGN_BLANK):
+            rep.add("WARN", "empty model field", at, f"{k} is empty")
+
+
+def _check_decoding(rep, p, at):
+    """Distance, course symbols, age/sex glyphs, leftover glyphs, stewards' marks."""
+    if p.get("distance") and p.get("distance_f") is None:
+        rep.add("FAIL", "decoding", at, f"distance {p['distance']!r} not decoded")
+    for sym in p.get("unrecognized_symbols") or []:
+        rep.add("WARN", "decoding", at, f"unrecognised course symbol {sym!r}")
+    odd = set(p.get("age_sex_code") or "") - AGE_SEX_OK
+    if odd:
+        rep.add(
+            "WARN",
+            "decoding",
+            at,
+            f"unknown age/sex glyph(s) {sorted(odd)} in {p['age_sex_code']!r}",
+        )
+    texts = [p.get("comment"), p.get("jockey"), p.get("race_class"), p.get("equipment")]
+    texts += [f.get("name") for f in p.get("top_finishers") or []]
+    for t in texts:
+        if t and LEFTOVER_GLYPHS.search(t):
+            rep.add("FAIL", "decoding", at, f"undecoded glyph left in text: {t!r}")
+    if p.get("stewards_change") == "?":
+        rep.add(
+            "WARN",
+            "decoding",
+            at,
+            "'*' (stewards' change) printed but no DQ/PL in the comment",
+        )
+
+
+def _check_plausibility(rep, p, at):
+    """Time per furlong, and finish position vs field size."""
+    sec, dist = p.get("final_time_seconds"), p.get("distance_f")
+    if sec and dist and not 10.5 <= sec / dist <= 14.5:
+        rep.add(
+            "WARN",
+            "plausibility",
+            at,
+            f"{p['final_time']} for {dist}f = {sec / dist:.1f} s/furlong",
+        )
+    fs, fin = p.get("field_size"), p.get("finish_position")
+    if fs and fin and fin > fs:
+        rep.add("WARN", "plausibility", at, f"finish {fin} > field size {fs}")
+
+
+# (field, lowest plausible, highest plausible, how to show the printed value)
+RANGES = (
+    ("field_size", 2, 20, lambda p: f"field size {p['field_size']}"),
+    ("weight", 100, 135, lambda p: f"weight {p['weight']}"),
+    ("odds", 0.05, 999, lambda p: f"odds {p['odds_text']}"),
+    ("speed_figure", -20, 140, lambda p: f"speed figure {p['speed_figure']}"),
+)
+
+
+def _check_ranges(rep, p, at):
+    for key, low, high, show in RANGES:
+        if p.get(key) is not None and not low <= p[key] <= high:
+            rep.add("WARN", "plausibility", at, show(p))
 
 
 def check_converter(rep, card):
