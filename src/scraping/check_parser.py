@@ -27,7 +27,7 @@ FAIL  the output is known to be incomplete or inconsistent (e.g. a printed PP li
 WARN  needs a human look: a value the model uses is empty, a value is implausible, or a
       symbol was not recognised. Often a genuine blank in the PDF ("---" speed figure).
 INFO  worth knowing, not a problem by itself (e.g. the program printed fewer PP lines than
-      the horse's starts; a track code without a full name).
+      the horse's starts; no known-good output saved for this PDF yet).
 
 What the checks can NOT see: a value that is wrong but plausible (a misread figure that
 still looks like a figure). Those need spot checks against the PDF; --compare-golden at
@@ -44,9 +44,15 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+# Make pdf_reading importable however this script is started (same folder, not an
+# installed package).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pdf_reading as pr  # noqa: E402  (needs the path above)
 
+# --------------------------------------------------------------------------
+# Settings: which fields are checked
+# --------------------------------------------------------------------------
+# The teammates' converter, loaded by check_converter
 REPO = Path(__file__).resolve().parents[2]
 CONVERTER = REPO / "src" / "model" / "pp_json_to_handicap.py"
 
@@ -55,6 +61,7 @@ CONVERTER = REPO / "src" / "model" / "pp_json_to_handicap.py"
 #
 # Horse fields that must not be empty.
 MODEL_HORSE_FIELDS = ("name", "program_number", "morning_line_odds", "trainer")
+
 # PP-line fields the converter reads, warned about when empty. purse is left out:
 # it is blank by design on claiming and similar races (they print a claiming price).
 MODEL_LINE_FIELDS = (
@@ -69,8 +76,10 @@ MODEL_LINE_FIELDS = (
     "surface",
     "race_class",
 )
+
 # Fields that must agree between horses whose histories contain the same earlier race.
 SHARED_RACE_FIELDS = ("distance_f", "surface", "field_size")
+
 # Glyph characters that should never survive into decoded text.
 LEFTOVER_GLYPHS = re.compile(
     "["
@@ -79,25 +88,38 @@ LEFTOVER_GLYPHS = re.compile(
 )
 
 
+# --------------------------------------------------------------------------
+# Collecting findings
+# --------------------------------------------------------------------------
+# The list of findings for one PDF. Each finding is (level, check, where, message),
+# e.g. ("FAIL", "pp lines", "R3", "9 PP lines printed on pages [24], 8 parsed").
 class Report:
+    # Start an empty report for one PDF
     def __init__(self, pdf):
         self.pdf = str(pdf)
         self.findings = []  # (level, check, where, message)
 
+    # Record one finding
     def add(self, level, check, where, message):
         self.findings.append((level, check, where, message))
 
+    # How many findings have this level ("FAIL", "WARN" or "INFO")
     def count(self, level):
         return sum(1 for f in self.findings if f[0] == level)
 
 
+# Describe where in the PDF a finding is, so a person can look it up
 def where(race=None, horse=None, line=None, page=None):
     """Where to look in the PDF, e.g.
     'p32 R5 #6 Never Gonna Stop (IRE) line 03Sep26 Sar'."""
     parts = []
+
+    # Page number: given directly, or taken from the PP line or the horse
     page = page or (line or {}).get("page") or (horse or {}).get("page")
     if page:
         parts.append(f"p{page}")
+
+    # Then race, horse and PP line, as far as they are given
     if race is not None:
         parts.append(f"R{race['race_number']}")
     if horse is not None:
@@ -111,31 +133,44 @@ def where(race=None, horse=None, line=None, page=None):
 
 
 # --------------------------------------------------------------------------
-# Counts taken straight from the page (independent of horse/field assignment)
+# Counts taken straight from the page (independent of how the parser assigned
+# text to horses and fields)
 # --------------------------------------------------------------------------
+# Count, per page, the PP lines and also-eligible markers that are printed
 def page_counts(doc, layouts):
     """Per page: printed PP lines and also-eligible markers."""
     out = {}
     for lay in layouts:
         spans = pr.page_spans(doc[lay.index], lay)
+
         # A PP line starts with a date like "16Aug26" at the left margin; count
         # distinct baselines.
         pp_lines = {round(s.base) for s in spans if s.x0 < 45 and pr.DATE_RE.match(s.t)}
+
+        # The bold "A" of an also-eligible horse's stacked "A"/"E" marker
         markers = sum(
             1 for s in spans if s.bold and s.x0 < 30 and 10 <= s.size <= 14 and s.t == "A"
         )
+
         out[lay.index + 1] = {"pp_lines": len(pp_lines), "ae_markers": markers}
     return out
 
 
+# --------------------------------------------------------------------------
+# Checks on the card: pages, races, horses, line counts, shared races
+# --------------------------------------------------------------------------
+# Warn about pages that look like PP pages but were not read as one
 def check_pages(rep, doc, card, layouts):
     if not layouts:
         rep.add("FAIL", "pages", "", "no past-performance pages found")
         return
+
     found = {lay.index for lay in layouts}
     for i, page in enumerate(doc):
         if i in found:
             continue
+
+        # Count dated lines in the PP glyph font on this skipped page
         spans = [
             s
             for b in page.get_text("dict")["blocks"]
@@ -148,6 +183,7 @@ def check_pages(rep, doc, card, layouts):
             for s in spans
             if pr.DATE_RE.match(s["text"].strip()) and "NorthernDancer" in s["font"]
         )
+
         # The "How to read the program" guide page shows example PP lines on purpose.
         if "HOW TO READ" in page.get_text().upper():
             continue
@@ -161,13 +197,18 @@ def check_pages(rep, doc, card, layouts):
             )
 
 
+# Race numbers unique and consecutive; every race has horses and a distance
 def check_races(rep, card):
+
+    # Race numbers
     nums = [r["race_number"] for r in card["races"]]
     for n in sorted({n for n in nums if nums.count(n) > 1}, key=str):
         rep.add("FAIL", "races", f"R{n}", "race number appears more than once")
     ints = sorted(n for n in nums if isinstance(n, int))
     if ints and ints != list(range(ints[0], ints[-1] + 1)):
         rep.add("WARN", "races", "", f"race numbers are not consecutive: {nums}")
+
+    # Each race
     for r in card["races"]:
         if not r["horses"]:
             rep.add("FAIL", "races", where(r), "race has no horses")
@@ -180,8 +221,11 @@ def check_races(rep, card):
             )
 
 
+# No gaps in program numbers; the horse fields the model needs are filled in
 def check_horses(rep, card):
     for r in card["races"]:
+
+        # A gap in the program numbers (1, 2, 4) means a horse was not parsed
         progs = [h.get("program_number") for h in r["horses"]]
         ints = sorted(p for p in progs if isinstance(p, int))
         missing = sorted(set(range(1, (ints[-1] if ints else 0) + 1)) - set(ints))
@@ -192,11 +236,16 @@ def check_horses(rep, card):
                 where(r),
                 f"program numbers missing (horse not parsed?): {missing}",
             )
+
         for h in r["horses"]:
+
+            # Empty model fields: name / program number are FAILs, the rest WARNs
             for k in MODEL_HORSE_FIELDS:
                 if h.get(k) in (None, ""):
                     level = "FAIL" if k in ("name", "program_number") else "WARN"
                     rep.add(level, "horses", where(r, h), f"{k} is empty")
+
+            # Class rating: "N/A" is printed for some horses (INFO); otherwise a WARN
             if h["past_performances"] and h.get("class_rating") is None:
                 printed = h.get("class_rating_text")
                 rep.add(
@@ -207,15 +256,19 @@ def check_horses(rep, card):
                 )
 
 
+# Compare what was parsed with what page_counts found printed on the page
 def check_line_counts(rep, card, counts):
     """Printed vs parsed PP lines and also-eligible markers, per race."""
     for r in card["races"]:
+
+        # Totals over all pages of the race
         printed = {
             k: sum(counts[p][k] for p in r["pages"] if p in counts)
             for k in ("pp_lines", "ae_markers")
         }
         parsed_lines = sum(len(h["past_performances"]) for h in r["horses"])
         parsed_ae = sum(1 for h in r["horses"] if h.get("also_eligible"))
+
         if parsed_lines != printed["pp_lines"]:
             rep.add(
                 "FAIL",
@@ -232,6 +285,9 @@ def check_line_counts(rep, card, counts):
                 f"{printed['ae_markers']} A/E markers printed, "
                 f"{parsed_ae} horses flagged",
             )
+
+        # Per horse: never more PP lines than lifetime starts; fewer than
+        # min(starts, 10) means the program printed a shortened history
         for h in r["horses"]:
             starts = ((h.get("records") or {}).get("life") or {}).get("starts")
             n = len(h["past_performances"])
@@ -252,17 +308,23 @@ def check_line_counts(rep, card, counts):
                 )
 
 
+# Two horses that ran in the same earlier race must agree on its details
 def check_shared_races(rep, card):
     """The same earlier race in several horses' histories must agree."""
+
+    # Group every PP line by the race it describes: (date, track, race number)
     seen = defaultdict(list)
     for r in card["races"]:
         for h in r["horses"]:
             for p in h["past_performances"]:
                 if p.get("race_number") is not None:
                     seen[(p["date"], p["track_code"], p["race_number"])].append((r, h, p))
+
     for (date, track, num), group in seen.items():
         if len(group) < 2:
             continue
+
+        # Race facts (distance, surface, field size) must be the same for everyone
         for k in SHARED_RACE_FIELDS:
             values = {json.dumps(p.get(k)) for _, _, p in group}
             if len(values) > 1:
@@ -275,6 +337,8 @@ def check_shared_races(rep, card):
                     f"{date} {track} race {num}",
                     f"{k} disagrees: {detail}",
                 )
+
+        # Two horses cannot finish in the same place, unless it was a dead heat
         finishes = [p["finish_position"] for _, _, p in group if p.get("finish_position")]
         if len(finishes) != len(set(finishes)):
             detail = "; ".join(
@@ -288,6 +352,10 @@ def check_shared_races(rep, card):
             )
 
 
+# --------------------------------------------------------------------------
+# Checks on each PP line's values
+# --------------------------------------------------------------------------
+# Run the four per-line checks below on every PP line of the card
 def check_values(rep, card):
     """Per PP line: empty model fields, decoding problems and implausible values."""
     for r in card["races"]:
@@ -309,6 +377,7 @@ FOREIGN_BLANK = (
 )
 
 
+# Warn about model fields left empty on a PP line
 def _check_empty_fields(rep, p, at):
     """One WARN per line, listing every empty field (a horse that did not finish has
     no finish, beaten lengths or stretch call; one line is easier to read than three)."""
@@ -321,6 +390,7 @@ def _check_empty_fields(rep, p, at):
         rep.add("WARN", "empty model field", at, f"empty: {', '.join(empty)}")
 
 
+# Report symbols or text the parser could not decode
 def _check_decoding(rep, p, at):
     """Distance, course symbols (-> surface), leftover glyphs in the race class,
     stewards' marks (-> finish_position)."""
@@ -340,9 +410,12 @@ def _check_decoding(rep, p, at):
         )
 
 
+# Values that are possible to read but cannot be right together
 def _check_plausibility(rep, p, at):
     """Time per furlong (catches a wrongly decoded distance_f), and finish position
     vs field size."""
+
+    # Horses run a furlong in roughly 11-13 seconds
     sec, dist = p.get("final_time_seconds"), p.get("distance_f")
     if sec and dist and not 10.5 <= sec / dist <= 14.5:
         rep.add(
@@ -351,6 +424,8 @@ def _check_plausibility(rep, p, at):
             at,
             f"{p['final_time']} for {dist}f = {sec / dist:.1f} s/furlong",
         )
+
+    # A horse cannot finish behind more horses than ran
     fs, fin = p.get("field_size"), p.get("finish_position")
     if fs and fin and fin > fs:
         rep.add("WARN", "plausibility", at, f"finish {fin} > field size {fs}")
@@ -363,33 +438,42 @@ RANGES = (
 )
 
 
+# Warn when a value is outside its plausible range (see RANGES)
 def _check_ranges(rep, p, at):
     for key, low, high, show in RANGES:
         if p.get(key) is not None and not low <= p[key] <= high:
             rep.add("WARN", "plausibility", at, show(p))
 
 
+# --------------------------------------------------------------------------
+# Check against the teammates' converter
+# --------------------------------------------------------------------------
+# Run every race through pp_json_to_handicap.convert_race; any error is a FAIL
 def check_converter(rep, card):
     """Every race must convert with the handicap converter
     (teammates' code, imported read-only)."""
     if not CONVERTER.exists():
         rep.add("INFO", "converter", "", f"{CONVERTER} not found; skipped")
         return
+
+    # Load the converter from its file path (src/model is not a package we import)
     spec = importlib.util.spec_from_file_location("pp_json_to_handicap", CONVERTER)
     conv = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(conv)
+
+    # Report any converter failure instead of stopping the check
     for r in card["races"]:
         try:
             conv.convert_race(r)
-        except (
-            Exception
-        ) as exc:  # report any converter failure instead of stopping the check
+        except Exception as exc:
             rep.add("FAIL", "converter", where(r), f"convert_race failed: {exc}")
 
 
 # --------------------------------------------------------------------------
 # Known-good ("golden") outputs
 # --------------------------------------------------------------------------
+# List the differences between two JSON values (at most `limit`), e.g.
+# "card.races[2].horses[0].name: "A" -> "B"". Calls itself for nested dicts/lists.
 def diff(a, b, path, out, limit):
     if len(out) >= limit:
         return
@@ -406,6 +490,7 @@ def diff(a, b, path, out, limit):
         )
 
 
+# Compare this run's output with the saved known-good output for the same PDF
 def compare_golden(rep, card, golden_dir):
     """Diff the essentials of `card` (the full card) against the saved known-good
     essentials. Only written fields are compared, so a change in a field nobody
@@ -416,9 +501,12 @@ def compare_golden(rep, card, golden_dir):
             "INFO", "golden", path.name, "no known-good output saved for this PDF yet"
         )
         return
+
     old = json.loads(path.read_text(encoding="utf-8"))
     changes = []
     diff(old, pr.slim_card(card), "card", changes, limit=40)
+
+    # One summary WARN, then one WARN per difference
     if changes:
         rep.add(
             "WARN",
@@ -432,6 +520,9 @@ def compare_golden(rep, card, golden_dir):
 
 
 # --------------------------------------------------------------------------
+# Running the checks
+# --------------------------------------------------------------------------
+# Run every check on a card that was already parsed (fetch.py uses this)
 def check_card(card, pdf, golden_dir=None):
     """Inspect a card that pdf_reading.parse_pdf already produced from `pdf`.
 
@@ -440,10 +531,14 @@ def check_card(card, pdf, golden_dir=None):
     Report; the caller decides what to do with FAILs (fetch.py, for example, exits 1).
     """
     rep = Report(pdf)
+
+    # Checks that need the open PDF
     with pr.pymupdf.open(str(pdf)) as doc:
         layouts = pr.find_pp_pages(doc)
         check_pages(rep, doc, card, layouts)
-        printed_counts = page_counts(doc, layouts)  # needs the open PDF
+        printed_counts = page_counts(doc, layouts)
+
+    # Checks on the card itself
     check_races(rep, card)
     check_horses(rep, card)
     check_line_counts(rep, card, printed_counts)
@@ -455,6 +550,7 @@ def check_card(card, pdf, golden_dir=None):
     return rep
 
 
+# Parse a PDF, then check it (the command line uses this)
 def check_pdf(pdf, golden_dir=None):
     """Parse `pdf` and check the result: the command-line path (see main()).
 
@@ -471,7 +567,14 @@ def check_pdf(pdf, golden_dir=None):
     return check_card(card, pdf, golden_dir), card
 
 
+# --------------------------------------------------------------------------
+# Output and command line
+# --------------------------------------------------------------------------
+# Print a report: a summary line, then the findings grouped by level and check.
+# INFO findings are only counted unless verbose_info is set.
 def print_report(rep, card, verbose_info):
+
+    # Header: the PDF, what was parsed, and the FAIL / WARN / INFO counts
     print(f"\n=== {rep.pdf}")
     if card:
         n_h = sum(len(r["horses"]) for r in card["races"])
@@ -485,9 +588,13 @@ def print_report(rep, card, verbose_info):
         f"    FAIL {rep.count('FAIL')}   WARN {rep.count('WARN')}   "
         f"INFO {rep.count('INFO')}"
     )
+
+    # Group the findings by (level, check)
     by_check = defaultdict(list)
     for f in rep.findings:
         by_check[(f[0], f[1])].append(f)
+
+    # Print FAILs first, then WARNs, then INFOs
     for level in ("FAIL", "WARN", "INFO"):
         for (lvl, check), items in sorted(by_check.items()):
             if lvl != level:
@@ -496,15 +603,20 @@ def print_report(rep, card, verbose_info):
                 print(f"    INFO {check}: {len(items)} (use --info to list)")
                 continue
             print(f"    {level} {check} ({len(items)}):")
+
+            # Print each distinct (where, message) only once
             seen = set()
             for _, _, at, msg in items:
-                if (at, msg) in seen:  # e.g. the same unknown track code on many lines
+                if (at, msg) in seen:
                     continue
                 seen.add((at, msg))
                 print(f"        {at}: {msg}")
 
 
+# Command line: check each PDF given, optionally save or compare golden outputs
 def main(argv=None):
+
+    # Arguments
     ap = argparse.ArgumentParser(
         description="Check pdf_reading.py output against the PDF itself."
     )
@@ -529,6 +641,7 @@ def main(argv=None):
     )
     args = ap.parse_args(argv)
 
+    # Check each PDF; with --save-golden, save its essentials as the known-good output
     reports, any_fail = [], False
     for pdf in args.pdfs:
         rep, card = check_pdf(pdf, args.compare_golden)
@@ -543,6 +656,8 @@ def main(argv=None):
                 encoding="utf-8",
             )
             print(f"    saved known-good output to {out / (Path(pdf).stem + '.json')}")
+
+    # With --json, also write every finding of every PDF to one file
     if args.json:
         Path(args.json).write_text(
             json.dumps(
@@ -562,6 +677,7 @@ def main(argv=None):
             + "\n",
             encoding="utf-8",
         )
+
     print(f"\n{'FAILED' if any_fail else 'OK'}: {len(reports)} PDF(s) checked")
     return 1 if any_fail else 0
 

@@ -81,6 +81,7 @@ except ImportError:  # pragma: no cover - older installs expose the module as fi
 # --------------------------------------------------------------------------
 # Glyph tables for the NorthernDancerNarrow symbol fonts
 # --------------------------------------------------------------------------
+# The symbol fonts print digits as other characters; this maps them back.
 GLYPH_DIGITS = {
     "^": "0",
     "¶": "1",
@@ -93,8 +94,12 @@ GLYPH_DIGITS = {
     "¾": "8",
     "¿": "9",
 }
+
+# Fractions of a length (½, ¼, ¾) and the short margins: head, neck, nose
 GLYPH_FRACTIONS = {"¡": 0.5, "¢": 0.25, "£": 0.75}
 GLYPH_MARGINS = {"«¬": ("hd", 0.1), "¨μ": ("nk", 0.25), "¨©": ("no", 0.05)}
+
+# Every character that can be part of a beaten-lengths margin
 LENGTH_CHARS = "".join(GLYPH_DIGITS) + "".join(GLYPH_FRACTIONS) + "«¬¨μ©"
 
 # Distance tokens in the past-performance lines.  The second symbol font prints the
@@ -113,12 +118,18 @@ DIST_FRACTION_GLYPHS = {
     "K": 8 / 16,
     "M": 12 / 16,
 }
+
 # Miles plus yards print the yards as superscript digits, which come out as the letters
 # À..É (U+00C0 + digit): "1ÇÀ" = 1 mile 70 yards, "1ÄÀ" = 1 mile 40 yards (Tampa Bay
 # Downs; its 1:40.26 final time sits between the mile and 1 mile 70 yard medians).
 SUPERSCRIPT_DIGITS = {chr(0xC0 + i): str(i) for i in range(10)}
 
+
+# --------------------------------------------------------------------------
+# Lookup tables: tracks, course symbols, medication, number words, months
+# --------------------------------------------------------------------------
 # Track codes used in the past-performance lines (extend freely).
+# Only the card's own track name is written ("Kee" -> "Keeneland").
 TRACK_NAMES = {
     "Kee": "Keeneland",
     "CD": "Churchill Downs",
@@ -186,6 +197,7 @@ COURSE_SYMBOLS = {
 }
 
 
+# The key a span has in COURSE_SYMBOLS: which symbol font, and which character
 def course_symbol_key(s):
     """(symbol font, character) for a span, e.g. ("2", "p"); the font's last character
     tells the NorthernDancer symbol fonts apart (...Narrow2, ...Dancer3)."""
@@ -193,9 +205,10 @@ def course_symbol_key(s):
 
 
 # Medication printed after the horse's name, e.g. "(L)" (first-time Lasix may add
-# a digit).
+# a digit). It is dropped from the name.
 MEDICATION_RE = re.compile(r"^\([LB]+\d?\)$")
 
+# Number words in race distances ("Six Furlongs", "One Mile And One Sixteenth")
 WORD_NUMBERS = {
     "one": 1,
     "two": 2,
@@ -216,6 +229,8 @@ WORD_NUMBERS = {
     "sixteenth": 1 / 16,
     "eighth": 1 / 8,
 }
+
+# "Aug" -> 8, for the dates printed on PP lines ("16Aug26")
 MONTHS = {
     m: i + 1
     for i, m in enumerate(
@@ -236,6 +251,10 @@ MONTHS = {
     )
 }
 
+
+# --------------------------------------------------------------------------
+# Column layout of a past-performance line
+# --------------------------------------------------------------------------
 # x-coordinate windows (points) of the past-performance line columns.
 COL = {
     "date": (0, 45),
@@ -302,8 +321,9 @@ REFERENCE_COLUMNS = (
 
 
 # --------------------------------------------------------------------------
-# Small helpers
+# Small helpers: decoding numbers, times, margins and distances
 # --------------------------------------------------------------------------
+# Read a printed number; None when it is not a number
 def _num(text):
     """int/float from a printed number ('$42,958', '61.35');
     None if not numeric ('N/A')."""
@@ -319,11 +339,13 @@ def _num(text):
     return int(f) if f.is_integer() and "." not in t else f
 
 
+# Turn symbol-font digit glyphs back into digits
 def decode_glyph_number(text):
     """'¼¼' -> '66', '^¾' -> '08'; unknown characters are dropped."""
     return "".join(GLYPH_DIGITS.get(c, "") for c in text)
 
 
+# Turn a printed time (hundredths in glyphs) into a plain time string
 def decode_time(token):
     """':22¼¼' -> '22.66', '1:11¾¿' -> '1:11.89', ':49' -> '49.00'."""
     m = re.match(r"^(\d*:\d{2})(.*)$", token.strip())
@@ -334,6 +356,7 @@ def decode_time(token):
     return f"{base}.{hundredths.ljust(2, '0')[:2]}"
 
 
+# "1:11.89" -> 71.89 seconds
 def time_to_seconds(text):
     if not text:
         return None
@@ -344,14 +367,19 @@ def time_to_seconds(text):
     return round(minutes * 60 + int(m.group(2)) + int(m.group(3)) / 100, 2)
 
 
+# Turn margin glyphs into lengths, as text and as a number
 def decode_margin(glyphs):
     """Lengths glyphs -> (text, float).
     '¶¾£' -> ('18 3/4', 18.75); '«¬' -> ('hd', 0.1)."""
     g = glyphs.strip()
     if not g:
         return "", 0.0
+
+    # Head / neck / nose
     if g in GLYPH_MARGINS:
         return GLYPH_MARGINS[g]
+
+    # Whole lengths (digit glyphs) plus a fraction glyph
     whole = decode_glyph_number("".join(c for c in g if c in GLYPH_DIGITS))
     frac = sum(GLYPH_FRACTIONS[c] for c in g if c in GLYPH_FRACTIONS)
     value = (int(whole) if whole else 0) + frac
@@ -360,29 +388,36 @@ def decode_margin(glyphs):
     return text, value
 
 
+# A race distance written in words (race header) -> furlongs
 def words_to_furlongs(text):
     """'Six Furlongs' -> 6.0, 'Eight And One Half Furlongs' -> 8.5,
     'One Mile And One Sixteenth' -> 8.5, 'One Mile And Seventy Yards' -> 8.32."""
     if not text:
         return None
     t = text.lower()
+
+    # "<number> [and one half / one quarter ...] furlongs"
     m = re.search(
         r"\b((?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
         r"(?:\s+and\s+(?:one|three)\s+(?:half|quarter|eighth|sixteenth))?)\s+furlongs?\b",
         t,
     )
+
     # Course chutes add a measured extra ("Seven Furlongs and 184 Feet", Keeneland's
     # Beard Course).
     extra = re.search(r"\band\s+(\d+)\s+(feet|yards)\b", t)
     extra_f = (
         int(extra.group(1)) / (660 if extra.group(2) == "feet" else 220) if extra else 0.0
     )
+
     if m:
         words = m.group(1).split()
         value = WORD_NUMBERS[words[0]]
         if len(words) == 4:
             value += WORD_NUMBERS[words[2]] * WORD_NUMBERS[words[3]]
         return round(float(value) + extra_f, 3)
+
+    # "<one|two> mile(s) [and one sixteenth / seventy yards ...]" (1 mile = 8 furlongs)
     m = re.search(
         r"\b(one|two)\s+miles?\b(?:\s+and\s+(one|three|seventy|forty)\s+"
         r"(sixteenth|eighth|quarter|half|yards))?",
@@ -398,21 +433,28 @@ def words_to_furlongs(text):
         else:
             value += extra_f  # "One Mile and 70 Yards" written with digits
         return round(float(value), 3)
+
+    # Digits: "6.5 furlongs"
     m = re.search(r"(\d+(?:\.\d+)?)\s*furlongs?", t)
     if m:
         return float(m.group(1))
     return None
 
 
+# A distance token from a PP line ("6K", "1B", "1ÇÀ") -> furlongs
 def line_distance_to_furlongs(token):
     """Past-performance distance token -> furlongs. '6f' -> 6, '1m' -> 8, '6K' -> 6.5,
     '1B' -> 8.5, '1N' -> 9, '1ÇÀ' -> 8.32 (1 mile 70 yards), '*7f' -> 7 (a leading
     '*' means "about" that distance)."""
     t = token.replace(" ", "").lstrip("*")
+
+    # Miles + yards in superscript digits
     ym = re.match("^(\\d+)([" + "".join(SUPERSCRIPT_DIGITS) + "]+)$", t)
     if ym:
         yards = int("".join(SUPERSCRIPT_DIGITS[c] for c in ym.group(2)))
         return round(int(ym.group(1)) * 8 + yards / 220, 3)
+
+    # Number, optional unit (f / m), optional fraction letter
     m = re.match(r"^(\d+)([fm]?)([A-Z]?)$", t)
     if not m:
         return None
@@ -430,7 +472,7 @@ def line_distance_to_furlongs(token):
 
 
 # --------------------------------------------------------------------------
-# Span access
+# Text spans: the pieces of text PyMuPDF reads from a page
 # --------------------------------------------------------------------------
 # Characters that different PDFs extract differently for the SAME printed glyph. The neck
 # margin "¨μ" comes out with GREEK SMALL MU (U+03BC) in some files and MICRO SIGN (U+00B5)
@@ -438,6 +480,7 @@ def line_distance_to_furlongs(token):
 LOOKALIKE_CHARS = str.maketrans({"µ": "μ"})
 
 
+# One run of text in one font: its text, position box, size, font and character boxes
 class Span:
     __slots__ = (
         "text",
@@ -453,27 +496,35 @@ class Span:
         "base",
     )
 
+    # Build a Span from one of PyMuPDF's span dicts
     def __init__(self, s):
         self.text = s["text"].translate(LOOKALIKE_CHARS)
+
         # (character, x0, x1) of every character -- used to split a span that runs on
         # across two columns of a past-performance line (see split_at_columns)
         self.chars = [
             (c.translate(LOOKALIKE_CHARS), a, b) for c, a, b in s.get("chars_x", [])
         ]
+
         self.x0, self.y0, self.x1, self.y1 = s["bbox"]
+
         # Baseline: the line the characters sit on. Text of different sizes on one printed
         # line shares it, while its top edge (y0) moves with the font size (see
         # group_rows).
         self.base = s["origin"][1] if "origin" in s else self.y1
+
+        # Font: size, bold, and whether it is one of the NorthernDancer symbol fonts
         self.size = round(s["size"], 1)
         self.font = s["font"]
         self.bold = "Bold" in self.font or ",Bo" in self.font or bool(s["flags"] & 16)
         self.symbol = "NorthernDancer" in self.font
 
+    # The text without surrounding spaces
     @property
     def t(self):
         return self.text.strip()
 
+    # A copy moved sideways (used to map columns onto the reference layout)
     def shifted(self, dx):
         """Copy of this span moved dx points to the right."""
         out = object.__new__(Span)
@@ -483,12 +534,14 @@ class Span:
         out.chars = [(c, a + dx, b + dx) for c, a, b in self.chars]
         return out
 
+    # A copy with different text
     def with_text(self, text):
         """Copy of this span with different text (same position and font)."""
         out = self.shifted(0)
         out.text = text
         return out
 
+    # A copy holding only part of the characters (used to cut a run-on span)
     def piece(self, chars):
         """Copy of this span holding only ``chars`` (a run of its characters)."""
         out = object.__new__(Span)
@@ -500,11 +553,13 @@ class Span:
         out.x0, out.x1 = visible[0][1], visible[-1][2]
         return out
 
+    # How a span prints when debugging, e.g. <120,24 7.4 B '16Aug26'>
     def __repr__(self):  # pragma: no cover - debugging aid
         bold = "B" if self.bold else ""
         return f"<{self.y0:.0f},{self.x0:.0f} {self.size} {bold} {self.t!r}>"
 
 
+# Read every piece of text on a page as Spans, in reading order
 def page_spans(page, layout=None):
     """All non-blank text spans on a page, sorted top-to-bottom, left-to-right.
 
@@ -513,6 +568,7 @@ def page_spans(page, layout=None):
     unchanged on a full race-day program where the PP pages are printed smaller.
     """
     out = []
+
     # "rawdict" gives every character's box, so a span's left edge can be taken from its
     # first VISIBLE character. Spans often begin with a space (" Moc 62500", " e");
     # counting the space put their left edge 1-2pt early, i.e. in the previous column.
@@ -527,11 +583,14 @@ def page_spans(page, layout=None):
                 first = next(c for c in chars if c["c"].strip())
                 s["bbox"] = (first["bbox"][0],) + tuple(raw["bbox"][1:])
                 s["chars_x"] = [(c["c"], c["bbox"][0], c["bbox"][2]) for c in chars]
+
+                # In a program: skip its own header / page number, and rescale the rest
                 if layout is not None:
                     if any(f in s["font"] for f in PROGRAM_CHROME_FONTS):
-                        continue  # the program's own running header / page number
+                        continue
                     s = layout.normalize(s)
                 out.append(Span(s))
+
     out.sort(key=lambda s: (s.y0, s.x0))
     return out
 
@@ -560,9 +619,11 @@ PP_LABEL_SIZE = 8.0  # size of the "Owner:" / "Silks:" / "Trainer:" labels there
 PROGRAM_CHROME_FONTS = ("OpenSans",)  # program-only running header and page numbers
 
 
+# One PP page, and how to map its coordinates back to the standalone sheet's
 class PageLayout:
     """One detected PP page and how to map its coordinates back to the PP-sheet frame."""
 
+    # Remember the page index, footer text, print scale and offsets
     def __init__(self, index, footer_text, scale, dx, dy):
         self.index = index  # 0-based page index in the PDF
         self.footer_text = footer_text
@@ -570,6 +631,7 @@ class PageLayout:
         self.dx = dx
         self.dy = dy
 
+    # Undo the program's shrink and shift on one span: x = (x' - dx) / scale
     def normalize(self, s):
         """Copy of a PyMuPDF span dict, with bbox and size mapped into the PP-sheet
         frame."""
@@ -594,6 +656,7 @@ class PageLayout:
         ]
         return out
 
+    # How a page layout prints when debugging
     def __repr__(self):  # pragma: no cover - debugging aid
         return (
             f"<page {self.index + 1} {self.footer_text!r} "
@@ -601,6 +664,7 @@ class PageLayout:
         )
 
 
+# All non-blank spans of a page as PyMuPDF's plain dicts (quick, no character boxes)
 def _raw_spans(page):
     return [
         s
@@ -611,6 +675,7 @@ def _raw_spans(page):
     ]
 
 
+# Find the PP pages of a PDF and measure how each one is scaled and shifted
 def find_pp_pages(doc):
     """Return a PageLayout for every past-performance page of ``doc``, in page order.
 
@@ -621,6 +686,8 @@ def find_pp_pages(doc):
     so it is set equal to the x shift (the program's top and left margins measured the
     same, about 10-11pt).
     """
+
+    # PP pages: the Equibase footer plus glyph-font text. Collect their label sizes.
     candidates, label_sizes = [], []
     for i, page in enumerate(doc):
         spans = _raw_spans(page)
@@ -643,11 +710,14 @@ def find_pp_pages(doc):
 
     if not candidates:
         return []
+
+    # Print scale: the median label size compared with the sheet's 8pt
     label_sizes.sort()
     scale = label_sizes[len(label_sizes) // 2] / PP_LABEL_SIZE if label_sizes else 1.0
     if abs(scale - 1.0) < 0.005:
         scale = 1.0  # standalone sheet: keep coordinates exactly as printed
 
+    # Per-page shift: where the footer starts compared with the sheet's x=18
     layouts = []
     for i, footer in candidates:
         dx = footer["bbox"][0] - scale * PP_FOOTER_X
@@ -659,6 +729,10 @@ def find_pp_pages(doc):
     return layouts
 
 
+# --------------------------------------------------------------------------
+# Rows and columns: grouping spans into printed lines and PP-line columns
+# --------------------------------------------------------------------------
+# Group spans into the printed lines they belong to
 def group_rows(spans, tol=2.5):
     """Group spans into printed lines by their BASELINE.
     Returns [(top y0, spans sorted by x)].
@@ -677,6 +751,7 @@ def group_rows(spans, tol=2.5):
     return [(min(s.y0 for s in r), sorted(r, key=lambda s: s.x0)) for _, r in rows]
 
 
+# Join spans into one string, with a space only where there is a visible gap
 def row_text(spans):
     """Join a row's spans, inserting a space only where the glyphs don't touch."""
     out = ""
@@ -697,10 +772,12 @@ def row_text(spans):
 NUMBER_RE = re.compile(r"^-?\d+$")
 
 
+# Is this span a lone number?
 def is_number_span(s):
     return NUMBER_RE.match(s.t) is not None
 
 
+# Which PP-line column (a COL name) a span belongs to
 def column_of(s):
     """The COL column a span belongs to.
 
@@ -713,7 +790,10 @@ def column_of(s):
     return _column_at(s.t, s.x0, s.x1)
 
 
+# The column for some text at x0..x1 (see column_of for the rules)
 def _column_at(text, x0, x1):
+
+    # A lone number: the column it overlaps most
     if NUMBER_RE.match(text.strip()):
         best, best_overlap = None, 0.0
         for name, (lo, hi) in COL.items():
@@ -722,9 +802,12 @@ def _column_at(text, x0, x1):
                 best, best_overlap = name, overlap
         if best is not None:
             return best
+
+    # Text: the column it starts in
     return next((name for name, (lo, hi) in COL.items() if lo <= x0 < hi), None)
 
 
+# Cut spans that run on from one column into the next
 def split_at_columns(row, stops):
     """Split spans that run on from one column into the next.
 
@@ -743,7 +826,9 @@ def split_at_columns(row, stops):
         if not s.chars:
             out.append(s)
             continue
-        words, cur = [], []  # runs of non-space characters with their boxes
+
+        # Split the span into words: runs of non-space characters with their boxes
+        words, cur = [], []
         for ch in s.chars:
             if ch[0].isspace():
                 if cur:
@@ -756,11 +841,14 @@ def split_at_columns(row, stops):
         if len(words) < 2:
             out.append(s)
             continue
+
+        # Cut before a word when a column stop lies in the gap before it and the word
+        # looks like that column. 1pt of slack: a right-aligned number may start just
+        # before its stop.
         pieces, start = [], 0
         for prev, w in zip(words, words[1:]):
             gap_lo, gap_hi = prev[-1][2], w[0][1]
             shape = text_shape("".join(ch[0] for ch in w))
-            # 1pt of slack: a right-aligned number may start just before its stop
             if any(
                 gap_lo + 0.5 < x <= gap_hi + 1.0 and shape == col_shape
                 for x, _, col_shape in stops
@@ -774,11 +862,13 @@ def split_at_columns(row, stops):
 
 
 # --------------------------------------------------------------------------
-# Past-performance line
+# Recognising a past-performance line
 # --------------------------------------------------------------------------
+# A PP line starts with its date: "16Aug26" (the race number can be glued on)
 DATE_RE = re.compile(r"^(\d{2})([A-Z][a-z]{2})(\d{2})(.*)$")
 
 
+# Is this row a PP line? (it starts at the left margin with a date in the glyph font)
 def is_pp_line(row):
     first = row[0]
     return first.symbol and first.x0 < 30 and DATE_RE.match(first.t) is not None
@@ -809,6 +899,7 @@ COLUMN_STYLE_COST = 6.0  # cost of matching columns that differ in boldness or t
 MIN_LINES_TO_LEARN = 20  # fewer PP lines than this: too little evidence, use COL as is
 
 
+# Reduce text to its "shape", so columns can be compared by how they look
 def text_shape(text):
     """'-58' -> '-9', '16Aug26' -> '9a9', ':22¼¸' -> ':9g',
     'Clm 20000nw2/L' -> 'a 9a9/a'."""
@@ -818,9 +909,12 @@ def text_shape(text):
     return re.sub(r"\s+", " ", t)
 
 
+# Measure where this PDF's PP-line columns start, and how each one looks
 def column_profile(rows):
     """[(x0, bold 0/1, most common text shape)] for every x0 (rounded) where at least
     COLUMN_STOP_SHARE of the PP-line rows have a span."""
+
+    # Per x position: how many lines have a span there, and the spans themselves
     spans_at = defaultdict(list)
     lines_at = defaultdict(int)
     for row in rows:
@@ -828,6 +922,8 @@ def column_profile(rows):
             lines_at[x] += 1
         for s in row:
             spans_at[round(s.x0)].append(s)
+
+    # Keep the common positions, each with its usual boldness and shape
     out = []
     for x in sorted(x for x, n in lines_at.items() if n >= COLUMN_STOP_SHARE * len(rows)):
         spans = spans_at[x]
@@ -840,6 +936,7 @@ def column_profile(rows):
     return out
 
 
+# Pair this PDF's columns with the reference columns (cheapest matching)
 def align_columns(ref, doc):
     """Match doc columns to reference columns: [(doc_x, ref_x), ...] left to right.
 
@@ -849,9 +946,12 @@ def align_columns(ref, doc):
     The path starts from a virtual match at the left edge with offset 0.
     """
 
+    # Extra cost when two matched columns look different (bold, shape)
     def style(i, j):
         return COLUMN_STYLE_COST * ((ref[i][1] != doc[j][1]) + (ref[i][2] != doc[j][2]))
 
+    # best[(i, j)]: cheapest cost of a matching that ends with ref[i] <-> doc[j];
+    # back[(i, j)]: the match before it on that path
     best, back = {}, {}
     for i in range(len(ref)):
         for j in range(len(doc)):
@@ -869,6 +969,9 @@ def align_columns(ref, doc):
             best[(i, j)], back[(i, j)] = cost + style(i, j), prev
     if not best:
         return []
+
+    # Cheapest end point (columns left over on the right also count as skipped),
+    # then walk back to the start to read off the matched pairs
     end = min(
         best,
         key=lambda k: best[k]
@@ -881,16 +984,19 @@ def align_columns(ref, doc):
     return path[::-1]
 
 
+# Moves a PP line's spans from this PDF's column positions onto the reference's
 class ColumnShift:
     """Moves the spans of a PP line from this PDF's column positions onto the
     reference's."""
 
+    # pairs: the matched (this PDF's x, reference x) columns from align_columns
     def __init__(self, pairs, columns=None):
         self.pairs = pairs  # [(doc_x, ref_x)], left to right
         self.identity = all(d == r for d, r in pairs)
         # this PDF's own column profile; without a learned one, assume the reference's
         self.columns = columns or list(REFERENCE_COLUMNS)
 
+    # How far to move something at x
     def offset_at(self, x):
         # A span takes the offset of the closest column stop at or left of x (1pt of slack
         # for rounding); spans left of every stop use the first stop's offset.
@@ -900,6 +1006,7 @@ class ColumnShift:
                 d, r = doc_x, ref_x
         return r - d
 
+    # Move every span of a row
     def apply(self, row):
         if self.identity:
             return row
@@ -911,6 +1018,7 @@ class ColumnShift:
         ]
 
 
+# Measure this PDF's columns and match them to the reference layout
 def learn_column_shift(rows):
     """Learn a ColumnShift from all PP-line rows of one PDF (see the section comment)."""
     rows = [r for r in rows if is_pp_line(r)]
@@ -921,6 +1029,10 @@ def learn_column_shift(rows):
     return ColumnShift(pairs or [(0, 0)], profile)
 
 
+# --------------------------------------------------------------------------
+# Reading one past-performance line
+# --------------------------------------------------------------------------
+# One PP line -> dict, decoded left to right by the helpers below
 def parse_pp_line(row, shift=None):
     """One past-performance line -> dict. Each helper below decodes one stretch of the
     line, left to right, and adds its fields to ``out``."""
@@ -938,13 +1050,16 @@ def parse_pp_line(row, shift=None):
     return out
 
 
+# Sort a PP line's spans into its columns: {"date": [...], "calls": [...], ...}
 def _line_columns(row, shift):
     """Spans of a PP line grouped by COL column name."""
+
     # Split run-on spans in this PDF's own coordinates (its own column stops), then move
     # the pieces onto the reference layout.
     row = split_at_columns(row, shift.columns if shift is not None else REFERENCE_COLUMNS)
     if shift is not None:
         row = shift.apply(row)
+
     by = defaultdict(list)
     for s in row:
         name = column_of(s)
@@ -953,6 +1068,7 @@ def _line_columns(row, shift):
     return by
 
 
+# Date, race number and track code of the earlier race
 def _parse_date_and_track(by, out):
     """Date, race number and track. Returns whether the race was run abroad."""
     m = DATE_RE.match(by["date"][0].t)
@@ -967,6 +1083,7 @@ def _parse_date_and_track(by, out):
     m = re.match(r"^(\d+)\s*(\S+)$", rt)
     out["race_number"] = int(m.group(1)) if m else None
     out["track_code"] = m.group(2) if m else rt
+
     # Foreign tracks carry their country in small print: "Dun(IRE)" -> "Dun".
     cm = re.match(r"^(.*?)\(([A-Z]{2,3})\)$", out["track_code"])
     if cm:
@@ -975,6 +1092,7 @@ def _parse_date_and_track(by, out):
     return foreign
 
 
+# Is this a symbol in the condition column that the parser does not know?
 def _is_unrecognized_symbol(s):
     """A symbol-font mark in the condition column that is neither a known course symbol,
     a rail-setting digit, nor (in the regular glyph font) part of the condition text."""
@@ -986,10 +1104,13 @@ def _is_unrecognized_symbol(s):
     )
 
 
+# Surface (dirt / turf / synthetic) of the earlier race
 def _parse_condition_and_course(by, out):
     """Surface, from the course symbol (see COURSE_SYMBOLS) or the track condition
     ("ft", "fm")."""
     cond_tokens = list(by["condition"])
+
+    # Track condition text ("ft", "fm", ...) and the first known course symbol
     cond = "".join(
         s.t
         for s in cond_tokens
@@ -997,10 +1118,12 @@ def _parse_condition_and_course(by, out):
     )
     keys = (course_symbol_key(s) for s in cond_tokens)
     symbol = next((COURSE_SYMBOLS[k] for k in keys if k in COURSE_SYMBOLS), None)
+
     # Unknown marks are recorded (not guessed at) so check_parser.py can report them.
     out["unrecognized_symbols"] = [
         f"{s.font[-1:]}:{s.t}" for s in cond_tokens if _is_unrecognized_symbol(s)
     ]
+
     # No symbol means the main (dirt) track; turf-only conditions still mean turf.
     turf_conditions = ("fm", "yl", "sf", "hd")
     out["surface"] = (
@@ -1008,8 +1131,10 @@ def _parse_condition_and_course(by, out):
     )
 
 
+# Distance of the earlier race, and its final time
 def _parse_distance_and_times(by, out):
     """Distance, and the final time (used by the checks to test the distance)."""
+
     # A time always contains ":". In marathon races the first fraction ("1:38") is wide
     # enough to start inside the distance column, so route such spans to the fractions.
     timed = [s for s in by["distance"] if ":" in s.t]
@@ -1024,30 +1149,36 @@ def _parse_distance_and_times(by, out):
     out["final_time_seconds"] = time_to_seconds(out["final_time"])
 
 
+# Race class text and the purse printed in it
 def _parse_class(by, out):
     """Race class ("Clm 20000nw2/L", "Stk - ... - 175k") and the purse in it."""
     out["race_class"] = row_text(by["class"]) or None
     out["purse"] = class_purse(out["race_class"] or "")
 
 
+# Early pace figure and speed figure
 def _parse_figures(by, out):
     """Early pace figure and speed figure."""
+
     # The bold figure in front of the pair (a newer column, not used) is told apart
     # from the early pace figure by weight: it is bold, the pace figure is not.
     fig_spans = by["bold"] + by["early"]
     early_sp = [s for s in fig_spans if not s.bold]
     out["early_pace"] = _num(early_sp[0].t.strip("-")) if early_sp else None
+
     # The speed figure is printed as "-65"; a two-digit post position ("12") can start
     # inside the speed column, so pick the speed figure by content rather than by x.
     speed_tokens = [s.t for s in by["speed"]]
     spd = next(
         (tk for tk in speed_tokens if tk.startswith("-") or not tk.isdigit()), None
     )
+
     # Foreign lines print a text rating instead ("T-86"): no speed figure.
     numeric = spd and not spd[0].isalpha()
     out["speed_figure"] = _num(re.sub(r"[^\d]", "", spd)) if numeric else None
 
 
+# The running line ("1¹ 2¡ 3* --") -> a list of calls (position + margin)
 def _decode_calls(calls_text):
     """'1¹ 2¡ 3* -- ' -> ([{position, margin, margin_text}, ...], stewards' mark seen)."""
     calls = []
@@ -1055,14 +1186,18 @@ def _decode_calls(calls_text):
     glyphs = re.escape(LENGTH_CHARS)
     for pos, g, star in re.findall(r"(\d{1,2}|--)([" + glyphs + r"]*)(\*?)", calls_text):
         steward_mark = steward_mark or bool(star)
+
+        # "--": no position at that call (e.g. the horse did not finish)
         if pos == "--":
             calls.append({"position": None, "margin": None, "margin_text": None})
             continue
+
         text, value = decode_margin(g)
         calls.append({"position": int(pos), "margin": value, "margin_text": text or None})
     return calls, steward_mark
 
 
+# Finish, beaten lengths, stretch and first-call positions from the calls
 def _set_positions(out, calls):
     """Finish, beaten lengths, stretch and first-call positions from the calls.
     Always present (None when not printed): a horse that did not finish ("-- --" at the
@@ -1073,11 +1208,15 @@ def _set_positions(out, calls):
         stretch_position=None,
         first_call_position=None,
     )
+
+    # The last call is the finish
     if calls and calls[-1]["position"] is not None:
         fin = calls[-1]
         out["finish_position"] = fin["position"]
         # A winner's margin is how far it WON by, so a winner is 0 lengths behind.
         out["lengths_behind"] = 0.0 if fin["position"] == 1 else fin["margin"]
+
+    # The one before it is the stretch call; the first call depends on the race type
     if len(calls) >= 2:
         out["stretch_position"] = calls[-2]["position"]
         # Sprints print a start position first (no margin), so the first call is the
@@ -1089,10 +1228,12 @@ def _set_positions(out, calls):
         out["first_call_position"] = first["position"] if first else None
 
 
+# Positions from the running line; also finds where the jockey / weight part ends
 def _parse_running_line(by, out, foreign):
     """Positions and beaten lengths from the calls. The jockey and weight that follow
     are matched only to find where the calls end and the equipment begins.
     Returns (jockey/weight regex match, stray '0' spans, stewards' mark seen)."""
+
     # Running line, jockey and weight share one region: the jockey name is sometimes
     # glued to the last call ("12º¸¡Asmussen K J") and the weight to the jockey
     # ("Hernandez J J 122"). A '0' glyph ('^') belonging to a 10 lb apprentice allowance
@@ -1103,6 +1244,8 @@ def _parse_running_line(by, out, foreign):
     region = row_text(by["calls"] + by["jockey"] + by["weight"] + stray)
     glyphs = re.escape(LENGTH_CHARS)
     region = re.sub(r"\s+(?=[" + glyphs + r"])", "", region)  # re-attach stray glyphs
+
+    # Split the region into the calls and the rest.
     # A "*" after the finish ("1¹*") marks a result changed by the stewards; the comment
     # then says "DQ3rd" (disqualified, placed 3rd) or "PL2nd" (moved up to 2nd).
     cm = re.match(
@@ -1112,25 +1255,31 @@ def _parse_running_line(by, out, foreign):
     if foreign and len(calls) == 2 and calls[0]["margin_text"] is None:
         # Foreign lines only print the post position and the finish: drop the post.
         calls = calls[1:]
+
     # Jockey, weight (+ apprentice allowance glyphs), and equipment letters glued on.
     jm = re.match(
         r"^(?P<jockey>.*?)\s*(?:(?P<weight>\d{3})(?P<bug>[" + glyphs + r"]*))?"
         r"\s*(?P<equip>[A-Za-z]*)\s*$",
         cm.group("rest"),
     )
+
     _set_positions(out, calls)
     return jm, stray, steward_mark
 
 
+# The text after the odds: the top three finishers and the comment
 def _text_after_odds(by, jockey_match, stray):
     """The finishers-and-comment text that follows the odds. The equipment and odds
     are not kept; the odds ("*2.10") are only found to know where that text starts,
     because some PDFs store the first finisher in the same span as the odds."""
+
+    # Equipment + odds text, then find the odds in it
     eo = row_text([s for s in by["equipment"] if s not in stray] + by["odds"])
     if jockey_match and jockey_match.group("equip"):
         # equipment glued to an apprentice weight ("119» fL")
         eo = jockey_match.group("equip") + " " + eo
     om = re.search(r"(\*?)(\d*\.\d+)", eo)
+
     # What can follow the odds:
     #   "®"  -- prints as a superscript "e": coupled entry;
     #   a lone 3-4 digit number ("995", "1074") -- only on lines from Santa Anita, Lone
@@ -1145,15 +1294,18 @@ def _text_after_odds(by, jockey_match, stray):
     return tm.group(2) if tm else tail
 
 
+# Use the official finish when the stewards changed the result (DQ / PL)
 def _apply_stewards_change(by, out, tail, steward_mark):
     """Official finish when the stewards changed the result: a "*" after the finish
     in the calls, and "DQ3rd" / "PL2nd" in the comment after the top three finishers.
     finish_position becomes the official place."""
+
     # A trouble icon -- a "w" in a third symbol font -- is printed in front of trouble
     # comments ("stmbld st", "off slow", "chckd turn"). Keep it out of the text: glued to
     # the third finisher's margin it would swallow the comment's first word
     # ("124¡woff slow").
     small = [s for s in by["finishers"] if "NorthernDancer3" not in s.font]
+
     # NOTE: a "^" here (second symbol font) is the digit 0 of a 10+ length margin
     # ("Holly122¶^" = 10 lengths, "¶^£" = 10 3/4), so it stays part of the text.
     # An "n" in the second symbol font prints as a boxed "DH" (dead heat) in front of a
@@ -1163,6 +1315,8 @@ def _apply_stewards_change(by, out, tail, steward_mark):
         s.with_text(" " + DEAD_HEAT_MARK) if s.font.endswith("2") and s.t == "n" else s
         for s in small
     ]
+
+    # Look for "DQ3rd" / "PL2nd" in the comment
     comment = comment_after_finishers((tail + " " + row_text(small)).strip())
     sm = re.search(r"\b(DQ|PL)(\d{1,2})(?:st|nd|rd|th)\b", comment or "")
     # "?" = the "*" is printed but the comment names no DQ/PL (reported by the checks).
@@ -1171,6 +1325,7 @@ def _apply_stewards_change(by, out, tail, steward_mark):
         out["finish_position"] = int(sm.group(2))
 
 
+# The purse printed in a race class, if that class prints one
 def class_purse(text):
     """The purse printed in a race class, or None.
     'Alw 100000nw1/x' -> 100000; 'Stk - FuturityG3 - 175k' -> 175000.
@@ -1179,12 +1334,15 @@ def class_purse(text):
     10-10-26 R8 is "Allowance Optional Claiming $80,000" with a $130,000 purse, and
     its PP class prints "Aoc 80000"."""
     t = text.strip()
+
     # Stakes-style class with the purse in thousands at the end
     sm = re.match(
         r"^[a-z]?(?:Stk|Hcp|Msw|Alw|Aoc|Clm|Mcl)\s*-\s*.+?\s*-\s*(?P<purse>\d+)k\s*$", t
     )
     if sm:
         return int(sm.group("purse")) * 1000
+
+    # "<class> <number>": the number is a purse only for these classes
     cm = re.match(r"^(?P<kind>[A-Za-z]+)\s*(?P<value>\d+)?", t)
     if cm and cm.group("value") and cm.group("kind") in ("Msw", "Alw", "Hcp", "Stk"):
         return int(cm.group("value"))
@@ -1199,6 +1357,7 @@ FINISHER_RE = re.compile(
 )
 
 
+# The comment that follows the top three finishers
 def comment_after_finishers(text):
     """'Sudden Squall122½ Legit Chick122£ C V Holly122¶^ 3p,rally' -> '3p,rally'.
     The whole text when the three finishers cannot be found; None when empty."""
@@ -1213,38 +1372,48 @@ def comment_after_finishers(text):
 # --------------------------------------------------------------------------
 # Horse block
 # --------------------------------------------------------------------------
+# One horse's block (header, labelled lines, record table, PP lines) -> dict
 def parse_horse(spans, shift=None):
     """spans: all spans of one horse block (program number row .. before the next).
     shift: the PDF's ColumnShift, applied to its past-performance lines."""
     rows = group_rows(spans)
+
     # The program is printed before scratches are known, so nothing here is ever
     # scratched; the field is kept because the converter reads it.
     horse = {"scratched": False}
+
     _parse_horse_header(spans, horse)
     _parse_labelled_lines(rows, horse)
     _parse_horse_name(spans, horse)
+
     # Only the lifetime starts (a check) and the track code (the card's track) are used.
     horse["records"] = parse_record_table(rows)
+
     horse["past_performances"] = _parse_pp_lines(rows, shift)
     set_figure_summaries(horse)
     return horse
 
 
+# Program number, also-eligible marker and morning-line odds
 def _parse_horse_header(spans, horse):
     """Program number, also-eligible marker and morning line."""
     prog = next((s for s in spans if s.bold and s.size >= 20 and s.x0 < 60), None)
     horse["program_number"] = _num(prog.t) if prog else None
+
     # Also-eligible horses have a stacked bold "A" / "E" (12pt) in the left margin
     # beside the program number (62 of them in the five test programs, nothing else
     # bold prints there).
     margin = {s.t for s in spans if s.bold and s.x0 < 30 and 10 <= s.size <= 14}
     horse["ae_marker"] = {"A", "E"} <= margin
+
+    # Morning line: bold, 13-15pt, just right of the program number
     odds = next(
         (s for s in spans if s.bold and 13 <= s.size <= 15 and 50 <= s.x0 <= 90), None
     )
     horse["morning_line_odds"] = odds.t if odds else None
 
 
+# Trainer, and the class rating printed on the Owner row
 def _parse_labelled_lines(rows, horse):
     """The Trainer line, and the Class rating printed on the Owner row."""
     for y, row in rows:
@@ -1254,6 +1423,8 @@ def _parse_labelled_lines(rows, horse):
         if not labels:
             continue
         label = labels[0]
+
+        # Trainer row
         if label.t == "Trainer:":
             value = row_text(
                 [s for s in row if s.x0 > label.x0 and not s.bold and s.x0 < 380]
@@ -1261,12 +1432,15 @@ def _parse_labelled_lines(rows, horse):
             # "Brad H. Cox ( 12-3-2-1 ) 25.00%" -> "Brad H. Cox". Some programs print
             # "Owner" here: the owner trains the horse.
             horse["trainer"] = re.sub(r"\s*\(.*$", "", value).strip() or None
+
+        # Owner row: the class rating is the bold number at its right end
         else:
             cls = next((s for s in row if s.bold and 375 <= s.x0 <= 412), None)
             horse["class_rating"] = _num(cls.t) if cls else None
             horse["class_rating_text"] = cls.t if cls else None  # for the checks
 
 
+# The horse's name
 def _parse_horse_name(spans, horse):
     """Name, without a medication code."""
     # Name row: the ArialBlack text left of the weight. Long names are printed smaller
@@ -1279,6 +1453,7 @@ def _parse_horse_name(spans, horse):
     horse["name"] = " ".join(s.t for s in name_spans if s not in meds) or None
 
 
+# One "Label: starts wins places shows earnings" group -> records[label]
 def _record_entry(toks, records):
     """One 'Label: starts wins places shows earnings' group of the record table."""
     if not toks or not toks[0].endswith(":"):
@@ -1288,12 +1463,14 @@ def _record_entry(toks, records):
     if len(nums) < 5:
         return
     key = label.lower().replace(" ", "_")
-    # "Kee Dirt" etc. is the record at today's track
+
+    # "Kee Dirt" etc. is the record at today's track; it also tells us the track code
     if re.match(
         r"^[A-Z][A-Za-z]+ (Dirt|Turf|Synthetic)$", label
     ) and not label.startswith("Wet"):
         key = "track_" + label.split()[1].lower()
         records["track_code"] = label.split()[0]
+
     records[key] = {
         "starts": nums[0],
         "wins": nums[1],
@@ -1303,6 +1480,7 @@ def _record_entry(toks, records):
     }
 
 
+# The record table on the right of the horse block ("Life:", "Dirt:", "Kee Dirt:", ...)
 def parse_record_table(rows):
     """Record table (right-hand side): label, starts, wins, places, shows, earnings,
     printed as two groups per row (e.g. 'Life:' and 'Dirt:')."""
@@ -1317,12 +1495,14 @@ def parse_record_table(rows):
     return records
 
 
+# All PP lines in a horse block
 def _parse_pp_lines(rows, shift):
     """The horse's past-performance lines (other rows, such as workouts or "Claimed
     by" notes, are skipped)."""
     return [parse_pp_line(row, shift) for y, row in rows if is_pp_line(row)]
 
 
+# The speed-figure list and average early pace that the converter reads
 def set_figure_summaries(horse):
     """Summaries for the handicap converter (most recent race first): the list of
     speed figures and the average early pace figure. Called again after
@@ -1331,6 +1511,7 @@ def set_figure_summaries(horse):
     horse["speed_figures"] = [
         p["speed_figure"] for p in pps if p.get("speed_figure") is not None
     ]
+
     figs = [p["early_pace"] for p in pps if p.get("early_pace") is not None]
     if figs:
         horse["pace"] = {"early_pace": round(sum(figs) / len(figs), 2)}
@@ -1341,12 +1522,14 @@ def set_figure_summaries(horse):
 # --------------------------------------------------------------------------
 # Race header
 # --------------------------------------------------------------------------
+# Race number, stakes name, distance and surface from the top of a race's first page
 def parse_race_header(spans, race_number):
     """spans: everything above the 'Program #' column header on a race's first page."""
     race = {"race_number": race_number}
     rows = group_rows(spans)
     texts = [(y, row_text(row), row) for y, row in rows]
 
+    # The big race number
     big = next((s for s in spans if s.bold and s.size >= 40), None)
     if big and _num(big.t) is not None:
         race["race_number"] = _num(big.t)
@@ -1374,11 +1557,13 @@ def parse_race_header(spans, race_number):
     ]
     race["stakes_name"] = " ".join(title + sponsor) if title else None
 
+    # Race conditions: the 9pt text block
     cond_spans = [s for s in spans if s.size == 9 and s.x0 < 600]
     # Order line by line with a tolerance (group_rows), not by round(y0): two spans on one
     # printed line can be ~0.2pt apart and land on different sides of a rounding boundary.
     cond_spans = [s for _, row in group_rows(cond_spans) for s in row]
     conditions = row_text(cond_spans) if cond_spans else None
+
     # Distance / course: the bold spans that follow the first regular-weight span
     first_regular = next((i for i, s in enumerate(cond_spans) if not s.bold), None)
     dist_spans = (
@@ -1393,6 +1578,7 @@ def parse_race_header(spans, race_number):
             r"((?:\w+ ){1,5}Furlongs?|(?:\w+ ){1,6}Miles?[^.]*)\s*$", conditions
         )
         distance_text = m.group(1).strip() if m else None
+
     race["distance"] = distance_text  # the printed words, shown by the checks
     race["distance_f"] = words_to_furlongs(distance_text or "")
     race["surface"] = (
@@ -1404,6 +1590,7 @@ def parse_race_header(spans, race_number):
 # --------------------------------------------------------------------------
 # Race-end footnotes (legend, equipment changes, mutuel ratings, also-eligibles)
 # --------------------------------------------------------------------------
+# Remove the footnotes printed after the last horse; note where ALSO ELIGIBLES starts
 def remove_footnotes(body):
     """Drop the footnote / legend spans printed at the end of a race, so they are not
     read as part of the last horse. Returns (remaining spans, y of the ALSO ELIGIBLES
@@ -1430,9 +1617,11 @@ def remove_footnotes(body):
 # --------------------------------------------------------------------------
 # Document walk
 # --------------------------------------------------------------------------
+# The Equibase footer on every PP page: "10/16/2026 Race 3"
 FOOTER_RE = re.compile(r"(\d{1,2})/(\d{1,2})/(\d{4})\s*Race\s*(\d+)")
 
 
+# The whole PDF -> the full card (every race, horse and PP line)
 def parse_pdf(path):
     """Whole PDF -> {"track", "date", "races": [race, ...], ...}
     (see the module docstring)."""
@@ -1446,17 +1635,22 @@ def parse_pdf(path):
     # full program that skips the ads, wagering guides and simulcast pages in between.
     layouts = find_pp_pages(doc)
     pages = [(layout, page_spans(doc[layout.index], layout)) for layout in layouts]
+
     # Learn how this PDF's PP-line columns line up with the layout COL was tuned on.
     shift = learn_column_shift(
         [row for _, spans in pages for _, row in group_rows(spans)]
     )
+
     for layout, spans in pages:
         pno = layout.index
+
+        # The card's date, from the first page footer
         fm = FOOTER_RE.search(layout.footer_text)
         if fm and not card_date:
             card_date = (
                 f"{int(fm.group(3))}-{int(fm.group(1)):02d}-{int(fm.group(2)):02d}"
             )
+
         # A new race starts on a page with the big race number; other pages continue it.
         big = next((s for s in spans if s.bold and s.size >= 40 and s.x0 < 40), None)
         if big is not None:
@@ -1471,9 +1665,12 @@ def parse_pdf(path):
         else:
             current["pages"].append(pno + 1)
             body = spans
+
+        # The horses on this page
         found = _parse_page_body(body, current, shift, pno)
         track_code = track_code or found
 
+    # Card-level fields, then the full card
     track_name = TRACK_NAMES.get(track_code or "", track_code)
     _finish_races(races, track_name, card_date)
     return {
@@ -1487,17 +1684,20 @@ def parse_pdf(path):
     }
 
 
+# Is this span the big program number that starts a horse block?
 def _is_program_number(s):
     """The big bold program number that starts each horse's block."""
     return s.bold and 20 <= s.size < 40 and s.x0 < 60 and _num(s.t) is not None
 
 
+# Where the race header ends and the horses begin on a race's first page
 def _race_header_cutoff(spans, big):
     """y below which a race's first page holds horses rather than the race header."""
     header_row = next(
         (s for s in spans if s.bold and s.size == 7 and s.t == "Program #"), None
     )
     cutoff = header_row.y1 if header_row else big.y1 + 100
+
     # The race header ends at the "Program #" column-header row -- but never below the
     # first horse's program number. The program's re-flowed pages put horse #1 closer to
     # that row (7pt vs 9.6pt on the PP sheet), so the row's bottom edge overlaps it.
@@ -1509,9 +1709,11 @@ def _race_header_cutoff(spans, big):
     return cutoff
 
 
+# Read the horses on one page of a race (and lines continued from the page before)
 def _parse_page_body(body, race, shift, pno):
     """Horses (and continuation lines) on one page of a race. Returns the card's track
     code when a horse's record table names it, else None."""
+
     # Drop footer / continuation banners, pull out the race-end legend lines
     body = [
         s
@@ -1520,6 +1722,7 @@ def _parse_page_body(body, race, shift, pno):
     ]
     body, also_eligible_y = remove_footnotes(body)
     starts = sorted([s for s in body if _is_program_number(s)], key=lambda s: s.y0)
+
     # Anything above the first program number on a continuation page belongs to the
     # previous horse -- the whole page if no new horse starts on it.
     lead = [s for s in body if not starts or s.y0 < starts[0].y0 - 1]
@@ -1530,6 +1733,8 @@ def _parse_page_body(body, race, shift, pno):
         for p in extra:
             p["page"] = pno + 1  # PDF page (1-based) the line is printed on
         race["horses"][-1]["past_performances"].extend(extra)
+
+    # Each horse block runs from its program number down to the next one
     track_code = None
     for i, st in enumerate(starts):
         y_hi = starts[i + 1].y0 - 1 if i + 1 < len(starts) else 10_000
@@ -1537,31 +1742,40 @@ def _parse_page_body(body, race, shift, pno):
         horse = parse_horse(block, shift)
         if not horse.get("name"):
             continue
+
         # Every also-eligible horse carries its own bold "A"/"E" marker; the banner check
         # is a backup and covers horses on later pages of the race too.
         below_banner = race.get("_ae_banner_seen") or (
             also_eligible_y is not None and st.y0 > also_eligible_y
         )
         horse["also_eligible"] = horse.pop("ae_marker") or bool(below_banner)
+
+        # Page numbers, for the check report
         horse["page"] = pno + 1
         for p in horse["past_performances"]:
             p["page"] = pno + 1
+
         race["horses"].append(horse)
         track_code = track_code or horse["records"].get("track_code")
+
     if also_eligible_y is not None:
         race["_ae_banner_seen"] = True
     return track_code
 
 
+# After all pages are read: track, date and name on every race; refresh the summaries
 def _finish_races(races, track_name, card_date):
     """Card-level fields, race name and figure summaries per race."""
     for race in races:
         race.pop("_ae_banner_seen", None)
         race["track"] = track_name
         race["date"] = card_date
+
+        # "Keeneland Race 8", plus " - <stakes name>" for a stakes race
         base = f"{track_name or 'Race'} Race {race['race_number']}"
         stakes = race.pop("stakes_name", None)
         race["name"] = f"{base} - {stakes}" if stakes else base
+
         for h in race["horses"]:
             # Re-derive now that continuation-page lines are attached
             set_figure_summaries(h)
@@ -1570,14 +1784,13 @@ def _finish_races(races, track_name, card_date):
 # --------------------------------------------------------------------------
 # Output: only the essentials
 # --------------------------------------------------------------------------
-# parse_pdf reads much more of the page than the model uses (owner, silks, breeding,
-# workouts, ...). Only this slim version is written to disk. It keeps
+# parse_pdf's full card also holds fields that only check_parser.py uses (each race's
+# pages, a horse's record table, the printed distance and final time, ...). Only this
+# slim version is written to disk. It keeps
 #   (a) what src/model/pp_json_to_handicap.py reads (see its ALIASES and
 #       HISTORY_ALIASES), and
 #   (b) identifiers, so a file or PP line says which race it is (date, track, race
 #       number), which is also what results will be matched on later.
-# check_parser.py still checks the FULL card in memory, because some checks need
-# fields that are not written (each race's pages, a horse's lifetime starts).
 CARD_FIELDS = ("track", "date")
 RACE_FIELDS = ("date", "track", "race_number", "name", "distance_f", "surface")
 HORSE_FIELDS = (
@@ -1611,11 +1824,13 @@ PP_FIELDS = (
 )
 
 
+# Copy only some keys of a dict
 def _pick(d, keys):
     """Copy only `keys` out of dict `d` (missing keys come out as None)."""
     return {k: d.get(k) for k in keys}
 
 
+# One race, cut down to the essentials (this is a race<N>.json file)
 def slim_race(race):
     """One full race -> the essentials; this is what the converter is given."""
     out = _pick(race, RACE_FIELDS)
@@ -1627,6 +1842,7 @@ def slim_race(race):
     return out
 
 
+# The whole card, cut down to the essentials (this is card.json)
 def slim_card(card):
     """Full card from parse_pdf -> the essentials that are written to disk."""
     out = _pick(card, CARD_FIELDS)
@@ -1635,9 +1851,12 @@ def slim_card(card):
 
 
 # --------------------------------------------------------------------------
-# CLI
+# Command line
 # --------------------------------------------------------------------------
+# Parse one PDF and write the JSON (whole card, one race, or a file per race)
 def main(argv=None):
+
+    # Arguments
     ap = argparse.ArgumentParser(
         description="Extract JSON from an Equibase past-performance PDF."
     )
@@ -1659,8 +1878,11 @@ def main(argv=None):
     )
     args = ap.parse_args(argv)
 
+    # Parse; keep the essentials unless --full
     full_card = parse_pdf(args.pdf)
     card = full_card if args.full else slim_card(full_card)
+
+    # --summary: one line per race and per horse, to stderr
     if args.summary:  # uses fields only the full card has
         for r in full_card["races"]:
             print(
@@ -1677,6 +1899,7 @@ def main(argv=None):
                     file=sys.stderr,
                 )
 
+    # --split-dir: one file per race
     if args.split_dir:
         out_dir = Path(args.split_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -1690,6 +1913,7 @@ def main(argv=None):
         if not args.output and not args.race:
             return 0
 
+    # --race: just one race instead of the whole card
     payload = card
     if args.race is not None:
         payload = next((r for r in card["races"] if r["race_number"] == args.race), None)
@@ -1700,6 +1924,8 @@ def main(argv=None):
                 file=sys.stderr,
             )
             return 1
+
+    # Write to the -o file, or print
     rendered = json.dumps(payload, indent=2, ensure_ascii=False)
     if args.output:
         Path(args.output).write_text(rendered + "\n", encoding="utf-8")
