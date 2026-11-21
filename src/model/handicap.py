@@ -1,5 +1,5 @@
 """
-Handicapping engine: v8 (locked), v9 (shadow), and PP-sheet derived mode.
+Handicapping engine: v8 (locked), v9, and PP-sheet derived mode.
 All scores are on a 0-100 scale.
 
 Reads and writes the handicap_output.jsonc layout: a list of races, each with a
@@ -10,7 +10,7 @@ Usage:
 python handicap.py                       # auto-run: finds handicap_output.jsonc
                                          # and updates it where it is (v8)
 python handicap.py path/to/race.jsonc    # scores that file and updates it where it is
-python handicap.py race.jsonc --v9       # same, using the v9 shadow model
+python handicap.py race.jsonc --v9       # same, using the v9 model
 python handicap.py race.jsonc --out p    # write to a different path instead of in place
 python handicap.py race.jsonc --text     # printed table + confidence instead of JSONC
 
@@ -19,7 +19,7 @@ to this script, then in a tests/ folder beside this script's folder.
 
 Each horse also carries a race-level confidence score (0-100) and label
 (HIGH / MEDIUM / LOW): how much to trust the top pick. It is a heuristic, NOT a
-calibrated win probability; backtest the thresholds before relying on the labels.
+calibrated win probability.
 
 How the JSONC fields feed the engine:
     race_distance_furlongs          -> distance_f
@@ -119,7 +119,6 @@ TRAINER_TIER = {  # fraction of max trainer points; edit freely
     "asmussen": 0.8,
     "d. ryan": 0.8,
     "sharp": 0.8,
-    # --- added: tiers are judgment calls, not computed from stats ---
     "joseph": 0.9,
     "casse": 0.9,
     "mcgaughey": 0.9,
